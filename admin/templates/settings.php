@@ -1,0 +1,147 @@
+<?php
+if (!defined('ABSPATH')) {
+    exit;
+}
+?>
+<div class="sas-wrap" data-page="settings">
+    <div class="sas-page-header">
+        <h1><?php esc_html_e('Settings', 'social-auto-scheduler'); ?></h1>
+    </div>
+
+    <form id="sas-settings-form">
+        <!-- Schedule Settings -->
+        <div class="sas-card">
+            <div class="sas-card__header">
+                <h2><?php esc_html_e('Schedule Settings', 'social-auto-scheduler'); ?></h2>
+            </div>
+            <div class="sas-card__body">
+                <div class="sas-settings-grid">
+                    <div class="sas-field">
+                        <label for="sas-timezone"><?php esc_html_e('Timezone', 'social-auto-scheduler'); ?></label>
+                        <select id="sas-timezone" name="timezone" class="sas-select">
+                            <?php foreach (DateTimeZone::listIdentifiers() as $tz) : ?>
+                                <option value="<?php echo esc_attr($tz); ?>"><?php echo esc_html($tz); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        <p class="sas-field__help"><?php esc_html_e('Publish times will be converted to this timezone.', 'social-auto-scheduler'); ?></p>
+                    </div>
+
+                    <div class="sas-field">
+                        <label for="sas-upload-time"><?php esc_html_e('Daily Upload Time', 'social-auto-scheduler'); ?></label>
+                        <input type="time" id="sas-upload-time" name="upload_time" class="sas-input" value="19:00" />
+                        <p class="sas-field__help"><?php esc_html_e('Videos will be scheduled for this time each day.', 'social-auto-scheduler'); ?></p>
+                    </div>
+
+                    <div class="sas-field">
+                        <label for="sas-uploads-per-day"><?php esc_html_e('Uploads Per Day', 'social-auto-scheduler'); ?></label>
+                        <input type="number" id="sas-uploads-per-day" name="uploads_per_day" class="sas-input" min="1" max="10" value="1" />
+                    </div>
+                </div>
+
+                <div class="sas-field">
+                    <label><?php esc_html_e('Active Days', 'social-auto-scheduler'); ?></label>
+                    <div class="sas-weekday-picker">
+                        <?php
+                        $days = [
+                            'mon' => __('Mon', 'social-auto-scheduler'),
+                            'tue' => __('Tue', 'social-auto-scheduler'),
+                            'wed' => __('Wed', 'social-auto-scheduler'),
+                            'thu' => __('Thu', 'social-auto-scheduler'),
+                            'fri' => __('Fri', 'social-auto-scheduler'),
+                            'sat' => __('Sat', 'social-auto-scheduler'),
+                            'sun' => __('Sun', 'social-auto-scheduler'),
+                        ];
+                        foreach ($days as $val => $label) :
+                        ?>
+                            <label class="sas-weekday-btn">
+                                <input type="checkbox" name="weekdays[]" value="<?php echo esc_attr($val); ?>" checked />
+                                <span><?php echo esc_html($label); ?></span>
+                            </label>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Default Video Settings -->
+        <div class="sas-card">
+            <div class="sas-card__header">
+                <h2><?php esc_html_e('Default Video Settings', 'social-auto-scheduler'); ?></h2>
+            </div>
+            <div class="sas-card__body">
+                <div class="sas-field">
+                    <label for="sas-default-description"><?php esc_html_e('Default Description', 'social-auto-scheduler'); ?></label>
+                    <textarea id="sas-default-description" name="default_description" class="sas-textarea" rows="4"
+                        placeholder="<?php esc_attr_e('Default description applied to all new videos…', 'social-auto-scheduler'); ?>"></textarea>
+                </div>
+                <div class="sas-field">
+                    <label for="sas-default-tags"><?php esc_html_e('Default Tags', 'social-auto-scheduler'); ?></label>
+                    <input type="text" id="sas-default-tags" name="default_tags" class="sas-input"
+                        placeholder="<?php esc_attr_e('tag1, tag2, tag3', 'social-auto-scheduler'); ?>" />
+                    <p class="sas-field__help"><?php esc_html_e('Comma-separated tags applied to all new videos.', 'social-auto-scheduler'); ?></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- YouTube Settings -->
+        <div class="sas-card">
+            <div class="sas-card__header">
+                <h2>YouTube API</h2>
+            </div>
+            <div class="sas-card__body">
+                <div class="sas-settings-grid">
+                    <div class="sas-field">
+                        <label for="sas-yt-client-id"><?php esc_html_e('Client ID', 'social-auto-scheduler'); ?></label>
+                        <input type="text" id="sas-yt-client-id" name="youtube_client_id" class="sas-input" autocomplete="off" />
+                    </div>
+                    <div class="sas-field">
+                        <label for="sas-yt-client-secret"><?php esc_html_e('Client Secret', 'social-auto-scheduler'); ?></label>
+                        <input type="password" id="sas-yt-client-secret" name="youtube_client_secret" class="sas-input" autocomplete="off"
+                            placeholder="<?php esc_attr_e('Leave blank to keep existing', 'social-auto-scheduler'); ?>" />
+                        <p class="sas-field__help"><?php esc_html_e('Stored encrypted. Leave blank to keep the current value.', 'social-auto-scheduler'); ?></p>
+                    </div>
+                    <div class="sas-field">
+                        <label for="sas-yt-category"><?php esc_html_e('Default Category ID', 'social-auto-scheduler'); ?></label>
+                        <input type="text" id="sas-yt-category" name="youtube_category" class="sas-input" value="22" />
+                        <p class="sas-field__help"><?php esc_html_e('22 = People & Blogs. See YouTube API docs for full list.', 'social-auto-scheduler'); ?></p>
+                    </div>
+                    <div class="sas-field">
+                        <label for="sas-yt-privacy"><?php esc_html_e('Default Privacy', 'social-auto-scheduler'); ?></label>
+                        <select id="sas-yt-privacy" name="youtube_privacy" class="sas-select">
+                            <option value="public"><?php esc_html_e('Public', 'social-auto-scheduler'); ?></option>
+                            <option value="unlisted"><?php esc_html_e('Unlisted', 'social-auto-scheduler'); ?></option>
+                            <option value="private"><?php esc_html_e('Private', 'social-auto-scheduler'); ?></option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Instagram Settings -->
+        <div class="sas-card">
+            <div class="sas-card__header">
+                <h2>Instagram / Meta API</h2>
+            </div>
+            <div class="sas-card__body">
+                <div class="sas-settings-grid">
+                    <div class="sas-field">
+                        <label for="sas-ig-app-id"><?php esc_html_e('App ID', 'social-auto-scheduler'); ?></label>
+                        <input type="text" id="sas-ig-app-id" name="instagram_app_id" class="sas-input" autocomplete="off" />
+                    </div>
+                    <div class="sas-field">
+                        <label for="sas-ig-app-secret"><?php esc_html_e('App Secret', 'social-auto-scheduler'); ?></label>
+                        <input type="password" id="sas-ig-app-secret" name="instagram_app_secret" class="sas-input" autocomplete="off"
+                            placeholder="<?php esc_attr_e('Leave blank to keep existing', 'social-auto-scheduler'); ?>" />
+                        <p class="sas-field__help"><?php esc_html_e('Stored encrypted.', 'social-auto-scheduler'); ?></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="sas-form-actions">
+            <button type="submit" class="sas-btn sas-btn--primary sas-btn--lg" id="sas-save-settings-btn">
+                <?php esc_html_e('Save Settings', 'social-auto-scheduler'); ?>
+            </button>
+        </div>
+    </form>
+</div>
