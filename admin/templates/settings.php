@@ -151,11 +151,11 @@ if (!defined('ABSPATH')) {
                     </p>
                 </div>
                 <div class="sas-field" style="margin-top:12px;">
-                    <label><?php esc_html_e('Redirect URI (register this full URL in Meta)', 'social-auto-scheduler'); ?></label>
+                    <label><?php esc_html_e('Redirect URI (register this in Meta — no extra parameters)', 'social-auto-scheduler'); ?></label>
                     <input type="text" class="sas-input" readonly
-                        value="<?php echo esc_attr( admin_url( 'admin.php?page=sas-accounts&sas_oauth=instagram' ) ); ?>"
+                        value="<?php echo esc_attr( admin_url( 'admin.php' ) ); ?>"
                         onclick="this.select()" style="cursor:pointer;" />
-                    <p class="sas-field__help"><?php esc_html_e('Click to select and copy. Register this full URL in your Business Login Configuration — Meta supports query parameters in redirect URIs.', 'social-auto-scheduler'); ?></p>
+                    <p class="sas-field__help"><?php esc_html_e('Click to select and copy. Register exactly this URL in your Business Login Configuration. Meta always redirects to its registered URI regardless of what is requested, so this must match exactly.', 'social-auto-scheduler'); ?></p>
                 </div>
             </div>
         </div>

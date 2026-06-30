@@ -116,8 +116,8 @@ if ( $sas_debug ) {
 
 				<div class="sas-notice sas-notice--info" style="margin-bottom:16px;">
 					<strong><?php esc_html_e( 'Redirect URI — paste this exactly into Meta Business Login Configuration:', 'social-auto-scheduler' ); ?></strong><br />
-					<code style="display:block;margin-top:6px;word-break:break-all;user-select:all;cursor:text;"><?php echo esc_html( admin_url( 'admin.php?page=sas-accounts&sas_oauth=instagram' ) ); ?></code>
-					<small style="display:block;margin-top:4px;color:#444;"><?php esc_html_e( 'Copy this full URL including the ?page= and &sas_oauth= parts — Meta supports query parameters in redirect URIs.', 'social-auto-scheduler' ); ?></small>
+					<code style="display:block;margin-top:6px;word-break:break-all;user-select:all;cursor:text;"><?php echo esc_html( admin_url( 'admin.php' ) ); ?></code>
+					<small style="display:block;margin-top:4px;color:#444;"><?php esc_html_e( 'Use this URL with no extra parameters. Meta\'s Business Login Configuration always redirects to its registered URI, ignoring any redirect_uri sent in the request — the plugin detects the Instagram callback automatically.', 'social-auto-scheduler' ); ?></small>
 				</div>
 
 				<ol>

@@ -81,7 +81,14 @@ class SAS_Instagram_Service {
 	}
 
 	private function get_redirect_uri(): string {
-		return admin_url( 'admin.php?page=sas-accounts&sas_oauth=instagram' );
+		// Confirmed via the OAuth debug log: Meta's Business Login Configuration
+		// redirects to the bare admin.php URL regardless of what redirect_uri we
+		// request, ignoring the ?page=&sas_oauth= query string. The token
+		// exchange then rejects a redirect_uri that doesn't match what Meta
+		// actually used for the OAuth dialog, so we must request and exchange
+		// using this same bare URL. The callback handler detects Instagram from
+		// the state nonce since the sas_oauth param won't be present.
+		return admin_url( 'admin.php' );
 	}
 
 	// ── OAuth: Step 1 — build the authorize URL ───────────────────────────────
