@@ -15,12 +15,11 @@ class SAS_Scheduler_Service {
             $user_id = get_current_user_id();
         }
 
-        $timezone = $this->settings_service->get('timezone', $user_id, 'UTC');
         $upload_time = $this->settings_service->get('upload_time', $user_id, '19:00');
         $uploads_per_day = $this->settings_service->get('uploads_per_day', $user_id, 1);
         $weekdays = $this->settings_service->get('weekdays', $user_id, ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']);
 
-        $timezone_obj = new DateTimeZone($timezone);
+        $timezone_obj = wp_timezone();
         $now = new DateTime('now', $timezone_obj);
         $current_date = (clone $now)->setTime(0, 0, 0);
 

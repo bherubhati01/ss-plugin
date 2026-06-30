@@ -210,17 +210,22 @@ class SAS_Upload_Service {
         int    $user_id
     ): array {
         $video_service = new SAS_Video_Service();
+        $settings      = new SAS_Settings_Service();
+        $default_desc  = (string) $settings->get('default_description', $user_id, '');
+        $default_tags  = SAS_Helpers::sanitize_tags((string) $settings->get('default_tags', $user_id, ''));
         $ids           = [];
 
         foreach ($platforms as $platform) {
             $ids[] = $video_service->create([
-                'file_path'  => $file_path,
-                'file_url'   => $file_url,
-                'title'      => $title,
-                'platform'   => $platform,
-                'account_id' => $account_id,
-                'file_size'  => $file_size,
-                'duration'   => $duration,
+                'file_path'   => $file_path,
+                'file_url'    => $file_url,
+                'title'       => $title,
+                'description' => $default_desc,
+                'tags'        => $default_tags,
+                'platform'    => $platform,
+                'account_id'  => $account_id,
+                'file_size'   => $file_size,
+                'duration'    => $duration,
             ], $user_id);
         }
 

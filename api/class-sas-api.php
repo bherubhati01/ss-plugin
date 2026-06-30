@@ -175,10 +175,10 @@ class SAS_API {
         $video_id = absint($request->get_param('id'));
         try {
             $scheduler = new SAS_Scheduler_Service();
+            // Sets status to 'scheduled' with a future publish_date. The cron's
+            // move_due_videos_to_queue() adds it to the queue once that date
+            // actually arrives — do NOT queue it here, or it publishes immediately.
             $date      = $scheduler->schedule_video($video_id, get_current_user_id());
-
-            $queue = new SAS_Queue_Service();
-            $queue->add($video_id);
 
             return new WP_REST_Response(['success' => true, 'publish_date' => $date->format('Y-m-d H:i:s')], 200);
         } catch (Exception $e) {
@@ -209,12 +209,12 @@ class SAS_API {
 
             case 'schedule':
                 $scheduler = new SAS_Scheduler_Service();
-                $queue     = new SAS_Queue_Service();
                 $count     = 0;
                 foreach ($ids as $id) {
                     try {
+                        // Cron queues each video once its publish_date arrives —
+                        // queuing here would publish all of them immediately.
                         $scheduler->schedule_video($id, $user_id);
-                        $queue->add($id);
                         $count++;
                     } catch (Exception $e) {
                         // continue
@@ -259,12 +259,12 @@ class SAS_API {
             );
 
             $scheduler = new SAS_Scheduler_Service();
-            $queue     = new SAS_Queue_Service();
             $results   = [];
 
+            // Cron queues each video once its publish_date arrives — queuing
+            // here would publish it within minutes instead of as scheduled.
             foreach ($video_ids as $vid_id) {
                 $date      = $scheduler->schedule_video($vid_id);
-                $queue->add($vid_id);
                 $results[] = ['id' => $vid_id, 'publish_date' => $date->format('Y-m-d H:i:s')];
             }
 
@@ -319,12 +319,12 @@ class SAS_API {
             $video_ids = $service->finalize_upload($upload_id);
 
             $scheduler = new SAS_Scheduler_Service();
-            $queue     = new SAS_Queue_Service();
             $results   = [];
 
+            // Cron queues each video once its publish_date arrives — queuing
+            // here would publish it within minutes instead of as scheduled.
             foreach ($video_ids as $vid_id) {
                 $date      = $scheduler->schedule_video($vid_id);
-                $queue->add($vid_id);
                 $results[] = ['id' => $vid_id, 'publish_date' => $date->format('Y-m-d H:i:s')];
             }
 
@@ -345,8 +345,10 @@ class SAS_API {
             return new WP_Error('not_found', __('Video not found.', 'social-auto-scheduler'), ['status' => 404]);
         }
 
-        // Block videos already being processed or published
-        if (in_array($video['status'], ['publishing', 'published'], true)) {
+        // Block videos already queued, being processed, or published —
+        // prevents a second active queue entry for the same video, which
+        // would cause the cron to publish it twice.
+        if (in_array($video['status'], ['queued', 'publishing', 'published'], true)) {
             return new WP_Error(
                 'invalid_status',
                 sprintf(__('Cannot publish: video is already %s.', 'social-auto-scheduler'), $video['status']),
@@ -412,7 +414,7 @@ class SAS_API {
         $data     = $request->get_json_params() ?? [];
 
         $safe_keys = [
-            'timezone', 'upload_time', 'uploads_per_day', 'weekdays',
+            'upload_time', 'uploads_per_day', 'weekdays',
             'default_description', 'default_tags', 'youtube_client_id',
             'youtube_category', 'youtube_privacy', 'instagram_app_id',
             'instagram_config_id',

@@ -879,7 +879,6 @@
             btn.textContent = sasData.strings.saving;
 
             const data = {
-                timezone:            document.getElementById('sas-timezone')?.value,
                 upload_time:         document.getElementById('sas-upload-time')?.value,
                 uploads_per_day:     document.getElementById('sas-uploads-per-day')?.value,
                 weekdays:            [...document.querySelectorAll('input[name="weekdays[]"]:checked')].map(cb => cb.value),
@@ -914,10 +913,6 @@
         try {
             const s = await api.get('/settings');
 
-            if (s.timezone) {
-                const sel = document.getElementById('sas-timezone');
-                if (sel) sel.value = s.timezone;
-            }
             if (s.upload_time)     setVal('sas-upload-time', s.upload_time);
             if (s.uploads_per_day) setVal('sas-uploads-per-day', s.uploads_per_day);
 

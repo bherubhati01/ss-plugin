@@ -8,6 +8,19 @@ class SAS_Queue_Service {
         global $wpdb;
 
         $table_name = $wpdb->prefix . 'sas_queue';
+
+        // Idempotent: skip if this video already has an active (queued or
+        // processing) entry instead of inserting a second row — otherwise
+        // the cron processes both rows and publishes the same video twice.
+        $existing = $wpdb->get_var($wpdb->prepare(
+            "SELECT id FROM $table_name WHERE video_id = %d AND status IN ('queued', 'processing') LIMIT 1",
+            $video_id
+        ));
+
+        if ($existing) {
+            return (int) $existing;
+        }
+
         $wpdb->insert(
             $table_name,
             [

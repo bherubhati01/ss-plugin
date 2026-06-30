@@ -273,6 +273,14 @@ body.sas-dark {
 
 .sas-textarea { resize: vertical; }
 
+.sas-input:disabled,
+.sas-select:disabled,
+.sas-textarea:disabled {
+    background: var(--sas-bg, #f3f4f6);
+    color: var(--sas-text-muted, #888);
+    cursor: not-allowed;
+}
+
 .sas-field {
     margin-bottom: 16px;
 }

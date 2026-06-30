@@ -17,13 +17,18 @@ if (!defined('ABSPATH')) {
             <div class="sas-card__body">
                 <div class="sas-settings-grid">
                     <div class="sas-field">
-                        <label for="sas-timezone"><?php esc_html_e('Timezone', 'social-auto-scheduler'); ?></label>
-                        <select id="sas-timezone" name="timezone" class="sas-select">
-                            <?php foreach (DateTimeZone::listIdentifiers() as $tz) : ?>
-                                <option value="<?php echo esc_attr($tz); ?>"><?php echo esc_html($tz); ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                        <p class="sas-field__help"><?php esc_html_e('Publish times will be converted to this timezone.', 'social-auto-scheduler'); ?></p>
+                        <label><?php esc_html_e('Timezone', 'social-auto-scheduler'); ?></label>
+                        <input type="text" class="sas-input" readonly
+                            value="<?php echo esc_attr( wp_timezone_string() ); ?>" />
+                        <p class="sas-field__help">
+                            <?php
+                            printf(
+                                /* translators: %s: link to WordPress general settings */
+                                esc_html__('Uses your WordPress site timezone. Change it under %s.', 'social-auto-scheduler'),
+                                '<a href="' . esc_url( admin_url( 'options-general.php' ) ) . '">' . esc_html__('Settings → General', 'social-auto-scheduler') . '</a>'
+                            );
+                            ?>
+                        </p>
                     </div>
 
                     <div class="sas-field">

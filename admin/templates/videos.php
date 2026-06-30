@@ -131,10 +131,11 @@ if (!defined('ABSPATH')) {
             </div>
             <div class="sas-field">
                 <label><?php esc_html_e('Platform', 'social-auto-scheduler'); ?></label>
-                <select id="sas-edit-platform" class="sas-select">
+                <select id="sas-edit-platform" class="sas-select" disabled>
                     <option value="youtube">YouTube</option>
                     <option value="instagram">Instagram</option>
                 </select>
+                <p class="sas-field__help"><?php esc_html_e('Platform cannot be changed after a video has been added — delete and re-upload to use a different platform.', 'social-auto-scheduler'); ?></p>
             </div>
         </div>
         <div class="sas-modal__footer">
