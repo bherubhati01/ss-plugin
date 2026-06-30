@@ -66,10 +66,16 @@ use YahnisElsts\PluginUpdateChecker\v5\PucFactory;
 // The URL must end with a trailing slash.
 //
 // Example: 'https://github.com/johndoe/social-auto-scheduler/'
+// Detect the slug from the actual installed folder name rather than
+// hardcoding it. If the slug doesn't match the real plugin directory,
+// WordPress can extract an update into a brand-new folder instead of
+// replacing the existing one, leaving the plugin deactivated.
+$sas_plugin_slug = dirname( plugin_basename( SAS_PLUGIN_DIR . 'social-auto-scheduler.php' ) );
+
 $sas_update_checker = PucFactory::buildUpdateChecker(
 	'https://github.com/bherubhati01/ss-plugin/',
-	SAS_PLUGIN_DIR . 'social-auto-scheduler.php',                    // Main plugin file.
-	'social-auto-scheduler'                                           // Plugin slug (= folder name).
+	SAS_PLUGIN_DIR . 'social-auto-scheduler.php', // Main plugin file.
+	$sas_plugin_slug                              // Plugin slug = installed folder name.
 );
 
 // ── 3. Track the stable branch ─────────────────────────────────────────────

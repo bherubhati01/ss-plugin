@@ -1,0 +1,82 @@
+name: Build & Release Plugin
+
+# Runs automatically whenever the plugin's Version header changes on main.
+# Pushing without bumping the version does nothing (no duplicate releases).
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'social-auto-scheduler.php'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (including PUC submodule, if used)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Extract plugin version from header
+        id: ver
+        run: |
+          VERSION=$(grep -m1 -oP '(?<=Version:)[ \t]*\K[0-9][0-9A-Za-z.\-]*' social-auto-scheduler.php | xargs)
+          if [ -z "$VERSION" ]; then
+            echo "Could not find a Version: header in social-auto-scheduler.php" >&2
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Skip if this version was already released
+        id: check
+        run: |
+          if git rev-parse "${{ steps.ver.outputs.tag }}" >/dev/null 2>&1; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "Tag ${{ steps.ver.outputs.tag }} already exists — skipping (bump Version: to release again)."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install Composer dependencies (only if not using the git submodule)
+        if: steps.check.outputs.skip == 'false'
+        run: |
+          if [ -f composer.json ] && [ ! -f plugin-update-checker/plugin-update-checker.php ]; then
+            composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader
+          fi
+
+      - name: Build plugin ZIP
+        if: steps.check.outputs.skip == 'false'
+        run: |
+          PLUGIN_DIR="WordPress Social Media Scheduler"
+          mkdir -p "build/$PLUGIN_DIR"
+          rsync -a \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='.vscode' \
+            --exclude='node_modules' \
+            --exclude='build' \
+            --exclude='*.zip' \
+            --exclude='composer.lock' \
+            ./ "build/$PLUGIN_DIR/"
+          cd build
+          zip -r "../social-auto-scheduler-${{ steps.ver.outputs.version }}.zip" "$PLUGIN_DIR"
+
+      - name: Tag this release commit
+        if: steps.check.outputs.skip == 'false'
+        run: |
+          git tag "${{ steps.ver.outputs.tag }}"
+          git push origin "${{ steps.ver.outputs.tag }}"
+
+      - name: Create GitHub Release with ZIP asset
+        if: steps.check.outputs.skip == 'false'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: ${{ steps.ver.outputs.tag }}
+          generate_release_notes: true
+          files: social-auto-scheduler-${{ steps.ver.outputs.version }}.zip
