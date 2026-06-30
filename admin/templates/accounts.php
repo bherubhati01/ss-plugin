@@ -121,7 +121,7 @@ if ( $sas_debug ) {
 				</div>
 
 				<ol>
-					<li><?php esc_html_e( 'Go to developers.facebook.com → My Apps → Create App.', 'social-auto-scheduler' ); ?></li>
+					<li><?php esc_html_e( '(Git Test ---) Go to developers.facebook.com → My Apps → Create App.', 'social-auto-scheduler' ); ?></li>
 					<li><?php esc_html_e( 'Select use case: "Manage messaging and content on Instagram" → Next.', 'social-auto-scheduler' ); ?></li>
 					<li><?php esc_html_e( 'Choose "Instagram Login Setup" (NOT Facebook Login Setup) → Create App.', 'social-auto-scheduler' ); ?></li>
 					<li><?php esc_html_e( 'Left sidebar → Instagram → "API setup with Instagram login".', 'social-auto-scheduler' ); ?></li>
