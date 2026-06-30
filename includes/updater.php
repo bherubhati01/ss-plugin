@@ -67,7 +67,7 @@ use YahnisElsts\PluginUpdateChecker\v5\PucFactory;
 //
 // Example: 'https://github.com/johndoe/social-auto-scheduler/'
 $sas_update_checker = PucFactory::buildUpdateChecker(
-	'https://github.com/bherubhati01/ss-plugin.git/', // ← CHANGE THIS
+	'https://github.com/bherubhati01/ss-plugin/',
 	SAS_PLUGIN_DIR . 'social-auto-scheduler.php',                    // Main plugin file.
 	'social-auto-scheduler'                                           // Plugin slug (= folder name).
 );
