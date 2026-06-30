@@ -26,6 +26,7 @@ define('SAS_PLUGIN_BASENAME', plugin_basename(__FILE__));
 require_once SAS_PLUGIN_DIR . 'includes/class-sas-autoloader.php';
 require_once SAS_PLUGIN_DIR . 'database/class-sas-installer.php';
 require_once SAS_PLUGIN_DIR . 'includes/class-sas-plugin.php';
+require_once SAS_PLUGIN_DIR . 'includes/updater.php';
 
 // Register activation/deactivation/uninstall hooks
 register_activation_hook(SAS_PLUGIN_BASENAME,   ['SAS_Installer', 'install']);

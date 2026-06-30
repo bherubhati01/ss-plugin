@@ -1,0 +1,18 @@
+{
+    "$schema": "https://getcomposer.org/schema.json",
+    "name": "your-vendor/social-auto-scheduler",
+    "description": "Automatically schedule and publish videos to YouTube and Instagram",
+    "type": "wordpress-plugin",
+    "license": "GPL-2.0-or-later",
+    "require": {
+        "php": ">=8.2",
+        "yahnis-elsts/plugin-update-checker": "^5.4"
+    },
+    "require-dev": {
+        "php-stubs/wordpress-stubs": "^6.0"
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "allow-plugins": {}
+    }
+}

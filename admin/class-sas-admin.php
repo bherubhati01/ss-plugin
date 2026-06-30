@@ -56,8 +56,8 @@ class SAS_Admin {
             return;
         }
 
-        wp_enqueue_style('sas-admin-css', SAS_PLUGIN_URL . 'assets/css/admin.css', [], SAS_VERSION);
-        wp_enqueue_script('sas-admin-js', SAS_PLUGIN_URL . 'assets/js/admin.js', [], SAS_VERSION, true);
+        wp_enqueue_style('sas-admin-css', SAS_PLUGIN_URL . 'assets/css/admin.css', [], '1.0.2');
+        wp_enqueue_script('sas-admin-js', SAS_PLUGIN_URL . 'assets/js/admin.js', [], '1.0.2', true);
 
         wp_localize_script('sas-admin-js', 'sasData', [
             'apiUrl'    => rest_url('sas/v1'),
@@ -83,46 +83,95 @@ class SAS_Admin {
     // -------------------------------------------------------------------------
 
     public function handle_oauth_callback(): void {
-        if (!current_user_can('manage_options')) {
+        // Write a marker the moment any OAuth params appear so we can tell
+        // whether THIS version of the file is running on the live server.
+        if ( ! empty( $_GET['code'] ) || ! empty( $_GET['error'] ) ) {
+            update_option( 'sas_oauth_debug', [
+                'v'          => '1.0.2',
+                'time'       => gmdate( 'Y-m-d H:i:s' ),
+                'user_id'    => get_current_user_id(),
+                'can_manage' => current_user_can( 'manage_options' ),
+                'sas_oauth'  => sanitize_key( $_GET['sas_oauth'] ?? '' ),
+                'has_code'   => ! empty( $_GET['code'] ),
+                'has_state'  => ! empty( $_GET['state'] ),
+                'step'       => 'started',
+            ] );
+        }
+
+        if ( ! current_user_can( 'manage_options' ) ) {
+            $this->_debug( [ 'step' => 'STOPPED: no manage_options cap' ] );
             return;
         }
 
-        $page   = sanitize_key($_GET['page']      ?? '');
-        $oauth  = sanitize_key($_GET['sas_oauth'] ?? '');
-        $code   = sanitize_text_field($_GET['code']  ?? '');
-        $state  = sanitize_text_field($_GET['state'] ?? '');
-        $error  = sanitize_text_field($_GET['error'] ?? '');
+        $oauth = sanitize_key( $_GET['sas_oauth'] ?? '' );
+        $code  = sanitize_text_field( $_GET['code']  ?? '' );
+        $state = sanitize_text_field( $_GET['state'] ?? '' );
+        $error = sanitize_text_field( $_GET['error'] ?? '' );
 
-        if ($page !== 'sas-accounts' || empty($oauth)) {
+        if ( empty( $code ) && empty( $error ) ) {
             return;
         }
 
-        if ($error) {
-            set_transient('sas_oauth_error', $error, 30);
-            wp_redirect(admin_url('admin.php?page=sas-accounts'));
+        if ( empty( $oauth ) && ! empty( $state ) ) {
+            $nonce_ig = wp_verify_nonce( $state, 'sas_instagram_oauth' );
+            $nonce_yt = wp_verify_nonce( $state, 'sas_youtube_oauth' );
+            $this->_debug( [
+                'step'     => 'nonce_check',
+                'nonce_ig' => $nonce_ig,
+                'nonce_yt' => $nonce_yt,
+                'state_len' => strlen( $state ),
+            ] );
+            if ( $nonce_ig ) {
+                $oauth = 'instagram';
+            } elseif ( $nonce_yt ) {
+                $oauth = 'youtube';
+            }
+        }
+
+        if ( empty( $oauth ) ) {
+            $this->_debug( [ 'step' => 'STOPPED: could not detect platform from state nonce' ] );
+            return;
+        }
+
+        if ( $error ) {
+            set_transient( 'sas_oauth_error', $error, 30 );
+            wp_redirect( admin_url( 'admin.php?page=sas-accounts' ) );
             exit;
         }
 
-        if (empty($code)) {
-            return;
-        }
+        $this->_debug( [ 'step' => 'processing', 'platform' => $oauth ] );
 
         try {
-            if ($oauth === 'youtube') {
+            if ( $oauth === 'youtube' ) {
                 $service = new SAS_Youtube_Service();
-                $service->handle_callback($code, $state);
-                set_transient('sas_oauth_success', 'youtube', 30);
-            } elseif ($oauth === 'instagram') {
+                $service->handle_callback( $code, $state );
+                set_transient( 'sas_oauth_success', 'youtube', 30 );
+            } elseif ( $oauth === 'instagram' ) {
                 $service = new SAS_Instagram_Service();
-                $service->handle_callback($code, $state);
-                set_transient('sas_oauth_success', 'instagram', 30);
+                $service->handle_callback( $code, $state );
+                set_transient( 'sas_oauth_success', 'instagram', 30 );
             }
-        } catch (Exception $e) {
-            set_transient('sas_oauth_error', $e->getMessage(), 30);
+            $this->_debug( [ 'step' => 'SUCCESS', 'platform' => $oauth ] );
+        } catch ( \Throwable $e ) {
+            // \Throwable catches both Exception and PHP 8 Error (fatal errors,
+            // "class not found", etc.) that Exception alone would miss.
+            $this->_debug( [
+                'step'  => 'EXCEPTION',
+                'class' => get_class( $e ),
+                'msg'   => $e->getMessage(),
+                'line'  => $e->getLine(),
+                'file'  => basename( $e->getFile() ),
+            ] );
+            set_transient( 'sas_oauth_error', $e->getMessage(), 30 );
         }
 
-        wp_redirect(admin_url('admin.php?page=sas-accounts'));
+        wp_redirect( admin_url( 'admin.php?page=sas-accounts' ) );
         exit;
+    }
+
+    private function _debug( array $extra ): void {
+        $current = get_option( 'sas_oauth_debug', [] );
+        update_option( 'sas_oauth_debug', array_merge( (array) $current, $extra ) );
     }
 
     // -------------------------------------------------------------------------

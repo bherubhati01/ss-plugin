@@ -68,7 +68,7 @@ class SAS_Instagram_Service {
 	// ── Credentials ───────────────────────────────────────────────────────────
 
 	private function get_app_id(): string {
-		return (string) ( new SAS_Settings_Service() )->get( 'instagram_app_id', null, '' );
+		return trim( (string) ( new SAS_Settings_Service() )->get( 'instagram_app_id', null, '' ) );
 	}
 
 	private function get_app_secret(): string {
@@ -76,25 +76,36 @@ class SAS_Instagram_Service {
 		return $enc ? SAS_Token_Service::decrypt( $enc ) : '';
 	}
 
+	private function get_config_id(): string {
+		return trim( (string) ( new SAS_Settings_Service() )->get( 'instagram_config_id', null, '' ) );
+	}
+
 	private function get_redirect_uri(): string {
-		// This exact URI must be registered under:
-		// Meta App Dashboard → Instagram → Business Login → Redirect URIs
 		return admin_url( 'admin.php?page=sas-accounts&sas_oauth=instagram' );
 	}
 
 	// ── OAuth: Step 1 — build the authorize URL ───────────────────────────────
 
 	public function get_auth_url(): string {
+		$config_id = $this->get_config_id();
+
 		$params = [
-			'client_id'       => $this->get_app_id(),
-			'redirect_uri'    => $this->get_redirect_uri(),
-			'scope'           => self::SCOPE,
-			'response_type'   => 'code',
-			'state'           => wp_create_nonce( 'sas_instagram_oauth' ),
-			// 0 = show only Instagram login screen (recommended for business apps).
-			// 1 = also offer "Continue with Facebook" option on the dialog.
-			'enable_fb_login' => '0',
+			'client_id'     => $this->get_app_id(),
+			'redirect_uri'  => $this->get_redirect_uri(),
+			'response_type' => 'code',
+			'state'         => wp_create_nonce( 'sas_instagram_oauth' ),
 		];
+
+		if ( $config_id ) {
+			// New Meta Developer Console flow (2024+): use a Business Login
+			// Configuration ID. The config bundles permissions + redirect URIs,
+			// so scope / enable_fb_login are NOT sent.
+			$params['config_id'] = $config_id;
+		} else {
+			// Legacy scope-based flow (still works when config_id is not used).
+			$params['scope']           = self::SCOPE;
+			$params['enable_fb_login'] = '0';
+		}
 
 		return self::AUTHORIZE_URL . '?' . http_build_query( $params );
 	}

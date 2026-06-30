@@ -125,15 +125,37 @@ if (!defined('ABSPATH')) {
             <div class="sas-card__body">
                 <div class="sas-settings-grid">
                     <div class="sas-field">
-                        <label for="sas-ig-app-id"><?php esc_html_e('App ID', 'social-auto-scheduler'); ?></label>
-                        <input type="text" id="sas-ig-app-id" name="instagram_app_id" class="sas-input" autocomplete="off" />
+                        <label for="sas-ig-app-id"><?php esc_html_e('Instagram App ID', 'social-auto-scheduler'); ?></label>
+                        <input type="text" id="sas-ig-app-id" name="instagram_app_id" class="sas-input" autocomplete="off"
+                            placeholder="e.g. 1234567890123456" />
+                        <p class="sas-field__help">
+                            <?php esc_html_e('Found on the "API setup with Instagram login" page inside your Meta app (Instagram product section). Must be digits only. This may differ from the App ID shown at the top of the Meta dashboard.', 'social-auto-scheduler'); ?>
+                        </p>
                     </div>
                     <div class="sas-field">
-                        <label for="sas-ig-app-secret"><?php esc_html_e('App Secret', 'social-auto-scheduler'); ?></label>
+                        <label for="sas-ig-app-secret"><?php esc_html_e('Instagram App Secret', 'social-auto-scheduler'); ?></label>
                         <input type="password" id="sas-ig-app-secret" name="instagram_app_secret" class="sas-input" autocomplete="off"
                             placeholder="<?php esc_attr_e('Leave blank to keep existing', 'social-auto-scheduler'); ?>" />
-                        <p class="sas-field__help"><?php esc_html_e('Stored encrypted.', 'social-auto-scheduler'); ?></p>
+                        <p class="sas-field__help"><?php esc_html_e('Stored encrypted. Found on the same "API setup with Instagram login" page alongside the Instagram App ID.', 'social-auto-scheduler'); ?></p>
                     </div>
+                </div>
+                <div class="sas-field" style="margin-top:12px;">
+                    <label for="sas-ig-config-id">
+                        <?php esc_html_e('Business Login Configuration ID', 'social-auto-scheduler'); ?>
+                        <span style="font-weight:400;color:#888;">(<?php esc_html_e('new Meta UI — recommended', 'social-auto-scheduler'); ?>)</span>
+                    </label>
+                    <input type="text" id="sas-ig-config-id" name="instagram_config_id" class="sas-input" autocomplete="off"
+                        placeholder="e.g. 1234567890123456" />
+                    <p class="sas-field__help">
+                        <?php esc_html_e('In the new Meta Developer Console: Instagram → API setup with Instagram login → Business Login → "Create new configuration". Copy the Configuration ID here. When set, this replaces the scope parameter and is the recommended approach for 2024+ apps. Leave blank to use the legacy scope approach.', 'social-auto-scheduler'); ?>
+                    </p>
+                </div>
+                <div class="sas-field" style="margin-top:12px;">
+                    <label><?php esc_html_e('Redirect URI (register this full URL in Meta)', 'social-auto-scheduler'); ?></label>
+                    <input type="text" class="sas-input" readonly
+                        value="<?php echo esc_attr( admin_url( 'admin.php?page=sas-accounts&sas_oauth=instagram' ) ); ?>"
+                        onclick="this.select()" style="cursor:pointer;" />
+                    <p class="sas-field__help"><?php esc_html_e('Click to select and copy. Register this full URL in your Business Login Configuration — Meta supports query parameters in redirect URIs.', 'social-auto-scheduler'); ?></p>
                 </div>
             </div>
         </div>

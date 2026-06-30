@@ -790,8 +790,8 @@
                 window.location.href = url;
             } catch (e) {
                 toast.error(e.message);
-                el.disabled     = false;
-                el.textContent  = 'Connect YouTube';
+                el.disabled    = false;
+                el.textContent = 'Connect YouTube';
             }
         });
 
@@ -889,6 +889,7 @@
                 youtube_category:    document.getElementById('sas-yt-category')?.value || '22',
                 youtube_privacy:     document.getElementById('sas-yt-privacy')?.value || 'public',
                 instagram_app_id:    document.getElementById('sas-ig-app-id')?.value || '',
+                instagram_config_id: document.getElementById('sas-ig-config-id')?.value || '',
             };
 
             const ytSecret = document.getElementById('sas-yt-client-secret')?.value;
@@ -932,6 +933,7 @@
             if (s.youtube_category)    setVal('sas-yt-category', s.youtube_category);
             if (s.youtube_privacy)     setVal('sas-yt-privacy', s.youtube_privacy);
             if (s.instagram_app_id)    setVal('sas-ig-app-id', s.instagram_app_id);
+            if (s.instagram_config_id) setVal('sas-ig-config-id', s.instagram_config_id);
         } catch (e) {
             console.error('Settings error', e);
         }
