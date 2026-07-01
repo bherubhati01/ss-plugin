@@ -196,12 +196,12 @@
             handleFiles(e.dataTransfer.files);
         });
 
-        function handleFiles(files) {
-            Array.from(files).forEach(file => {
+        async function handleFiles(files) {
+            for (const file of Array.from(files)) {
                 const allowed = ['video/mp4', 'video/quicktime'];
                 if (!allowed.includes(file.type) && !file.name.match(/\.(mp4|mov)$/i)) {
                     toast.error(`${file.name}: only MP4 and MOV allowed`);
-                    return;
+                    continue;
                 }
                 // Validate at least one platform is selected
                 const platforms = getSelectedPlatforms(selectorEl || area.closest('.sas-card'));
@@ -209,8 +209,8 @@
                     toast.error('Please select at least one platform (YouTube or Instagram).');
                     return;
                 }
-                uploadFile(file, platforms);
-            });
+                await uploadFile(file, platforms);
+            }
         }
 
         function uploadFile(file, platforms) {
@@ -220,28 +220,32 @@
 
             const accountId = 0; // Primary account per platform is resolved server-side
 
-            const uploader = new ChunkedUploader(
-                file, platforms, accountId,
-                pct => item.setProgress(pct),
-                result => {
-                    // result.videos = [{id, publish_date}, ...]
-                    const videos = result.videos || [];
-                    const dates  = videos.map(v => formatDate(v.publish_date)).join(', ');
-                    item.setDone(dates ? `Scheduled: ${dates}` : 'Uploaded!');
-                    const count = videos.length;
-                    toast.success(
-                        count > 1
-                            ? `${file.name} uploaded — ${count} entries scheduled (${platformLabel})`
-                            : `${file.name} uploaded and scheduled!`
-                    );
-                    reloadCurrentPage();
-                },
-                msg => {
-                    item.setError(msg);
-                    toast.error(`Upload failed: ${msg}`);
-                }
-            );
-            uploader.start();
+            return new Promise(resolve => {
+                const uploader = new ChunkedUploader(
+                    file, platforms, accountId,
+                    pct => item.setProgress(pct),
+                    result => {
+                        // result.videos = [{id, publish_date}, ...]
+                        const videos = result.videos || [];
+                        const dates  = videos.map(v => formatDate(v.publish_date)).join(', ');
+                        item.setDone(dates ? `Scheduled: ${dates}` : 'Uploaded!');
+                        const count = videos.length;
+                        toast.success(
+                            count > 1
+                                ? `${file.name} uploaded — ${count} entries scheduled (${platformLabel})`
+                                : `${file.name} uploaded and scheduled!`
+                        );
+                        reloadCurrentPage();
+                        resolve(result);
+                    },
+                    msg => {
+                        item.setError(msg);
+                        toast.error(`Upload failed: ${msg}`);
+                        resolve(); // continue with next file even if this one failed
+                    }
+                );
+                uploader.start();
+            });
         }
     }
 
