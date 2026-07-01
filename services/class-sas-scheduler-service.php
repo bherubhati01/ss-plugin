@@ -15,39 +15,36 @@ class SAS_Scheduler_Service {
             $user_id = get_current_user_id();
         }
 
-        $upload_time = $this->settings_service->get('upload_time', $user_id, '19:00');
-        $uploads_per_day = $this->settings_service->get('uploads_per_day', $user_id, 1);
-        $weekdays = $this->settings_service->get('weekdays', $user_id, ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']);
+        $upload_time     = $this->settings_service->get('upload_time', $user_id, '19:00');
+        $uploads_per_day = (int) $this->settings_service->get('uploads_per_day', $user_id, 1);
+        $weekdays        = $this->settings_service->get('weekdays', $user_id, ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']);
 
         $timezone_obj = wp_timezone();
-        $now = new DateTime('now', $timezone_obj);
-        $current_date = (clone $now)->setTime(0, 0, 0);
+        $now          = new DateTime('now', $timezone_obj);
 
         $last_scheduled = $this->get_last_scheduled_date($user_id, $timezone_obj);
-        if ($last_scheduled) {
-            $current_date = (clone $last_scheduled)->setTime(0, 0, 0);
+
+        // If a future-scheduled video exists, start searching from the day after it
+        // so new videos land on their own day.
+        // If no future-scheduled video exists (none at all, or all are in the past),
+        // start from today — the $candidate > $now check below skips today if the
+        // upload time has already passed.
+        if ($last_scheduled && $last_scheduled > $now) {
+            $search_from = (clone $last_scheduled)->modify('+1 day')->setTime(0, 0, 0);
+        } else {
+            $search_from = (clone $now)->setTime(0, 0, 0);
         }
-
-        $todays_uploads = $this->get_uploads_for_date($current_date, $user_id);
-
-        if ($todays_uploads < $uploads_per_day && $last_scheduled && $last_scheduled >= $now) {
-            $next_date = clone $last_scheduled;
-            $next_date->modify('+1 second');
-            if ($this->is_valid_weekday($next_date, $weekdays)) {
-                return $this->apply_time($next_date, $upload_time);
-            }
-        }
-
-        $start_date = $last_scheduled ? (clone $last_scheduled)->modify('+1 day') : $current_date;
 
         while (true) {
-            if ($this->is_valid_weekday($start_date, $weekdays)) {
-                $date_uploads = $this->get_uploads_for_date($start_date, $user_id);
-                if ($date_uploads < $uploads_per_day) {
-                    return $this->apply_time($start_date, $upload_time);
+            if ($this->is_valid_weekday($search_from, $weekdays)) {
+                $candidate   = $this->apply_time(clone $search_from, $upload_time);
+                $slots_taken = (int) $this->get_uploads_for_date($search_from, $user_id);
+
+                if ($candidate > $now && $slots_taken < $uploads_per_day) {
+                    return $candidate;
                 }
             }
-            $start_date->modify('+1 day');
+            $search_from->modify('+1 day');
         }
     }
 

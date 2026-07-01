@@ -627,8 +627,11 @@
         document.getElementById('sas-edit-tags').value = tagsStr;
 
         if (video.publish_date) {
-            const d = new Date(video.publish_date);
-            document.getElementById('sas-edit-date').value = d.toISOString().slice(0,16);
+            // publish_date is stored in WP local timezone; parse as local (no Z)
+            const d = new Date(video.publish_date.replace(' ', 'T'));
+            const pad = n => String(n).padStart(2, '0');
+            document.getElementById('sas-edit-date').value =
+                `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
         } else {
             document.getElementById('sas-edit-date').value = '';
         }
@@ -968,7 +971,7 @@
             }
             tbody.innerHTML = logs.map(l => `
                 <tr>
-                    <td class="sas-text-muted">${esc(l.created_at || '')}</td>
+                    <td class="sas-text-muted">${esc(formatDate(l.created_at ? l.created_at.replace(' ', 'T') + 'Z' : ''))}</td>
                     <td><span class="sas-badge sas-badge--level-${esc(l.level)}">${esc(l.level)}</span></td>
                     <td><code>${esc(l.action)}</code></td>
                     <td>${esc(l.message)}</td>

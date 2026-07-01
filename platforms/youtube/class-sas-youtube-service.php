@@ -30,12 +30,14 @@ class SAS_Youtube_Service {
     // Credentials (stored in plugin settings)
     // -------------------------------------------------------------------------
 
-    private function get_client_id(): string {
-        return (new SAS_Settings_Service())->get('youtube_client_id', null, '');
+    private function get_client_id(int $user_id = 0): string {
+        $uid = $user_id ?: get_current_user_id();
+        return (new SAS_Settings_Service())->get('youtube_client_id', $uid, '');
     }
 
-    private function get_client_secret(): string {
-        $enc = (new SAS_Settings_Service())->get('youtube_client_secret_enc', null, '');
+    private function get_client_secret(int $user_id = 0): string {
+        $uid = $user_id ?: get_current_user_id();
+        $enc = (new SAS_Settings_Service())->get('youtube_client_secret_enc', $uid, '');
         return $enc ? SAS_Token_Service::decrypt($enc) : '';
     }
 
@@ -106,12 +108,13 @@ class SAS_Youtube_Service {
     // -------------------------------------------------------------------------
 
     public function refresh_token(array $account): array {
+        $user_id  = (int) ($account['user_id'] ?? 0);
         $response = wp_remote_post(self::TOKEN_URL, [
             'timeout' => 30,
             'body'    => [
                 'refresh_token' => $account['refresh_token'],
-                'client_id'     => $this->get_client_id(),
-                'client_secret' => $this->get_client_secret(),
+                'client_id'     => $this->get_client_id($user_id),
+                'client_secret' => $this->get_client_secret($user_id),
                 'grant_type'    => 'refresh_token',
             ],
         ]);
