@@ -32,15 +32,14 @@ if (!defined('ABSPATH')) {
                     </div>
 
                     <div class="sas-field">
-                        <label for="sas-upload-time"><?php esc_html_e('Daily Upload Time', 'social-auto-scheduler'); ?></label>
-                        <input type="time" id="sas-upload-time" name="upload_time" class="sas-input" value="19:00" />
-                        <p class="sas-field__help"><?php esc_html_e('Videos will be scheduled for this time each day.', 'social-auto-scheduler'); ?></p>
+                        <label for="sas-uploads-per-day"><?php esc_html_e('Uploads Per Day (Per Platform)', 'social-auto-scheduler'); ?></label>
+                        <input type="number" id="sas-uploads-per-day" name="uploads_per_day" class="sas-input" min="1" max="15" value="1" />
+                        <p class="sas-field__help"><?php esc_html_e('e.g. 2 = 2 YouTube + 2 Instagram per day. Max 15.', 'social-auto-scheduler'); ?></p>
                     </div>
+                </div>
 
-                    <div class="sas-field">
-                        <label for="sas-uploads-per-day"><?php esc_html_e('Uploads Per Day', 'social-auto-scheduler'); ?></label>
-                        <input type="number" id="sas-uploads-per-day" name="uploads_per_day" class="sas-input" min="1" max="10" value="1" />
-                    </div>
+                <div id="sas-upload-times-container">
+                    <!-- Upload time slots rendered by JS based on Uploads Per Day -->
                 </div>
 
                 <div class="sas-field">

@@ -309,6 +309,20 @@ body.sas-dark {
     .sas-settings-grid { grid-template-columns: 1fr; }
 }
 
+/* Upload time slots grid */
+.sas-upload-times-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 0 24px;
+    margin-top: 8px;
+}
+
+/* Validation error state for inputs */
+.sas-input--error {
+    border-color: #ef4444 !important;
+    box-shadow: 0 0 0 2px rgba(239,68,68,.15);
+}
+
 /* Weekday picker */
 .sas-weekday-picker {
     display: flex;

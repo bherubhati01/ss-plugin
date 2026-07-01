@@ -414,7 +414,7 @@ class SAS_API {
         $data     = $request->get_json_params() ?? [];
 
         $safe_keys = [
-            'upload_time', 'uploads_per_day', 'weekdays',
+            'upload_time', 'upload_times', 'uploads_per_day', 'weekdays',
             'default_description', 'default_tags', 'youtube_client_id',
             'youtube_category', 'youtube_privacy', 'instagram_app_id',
             'instagram_config_id',

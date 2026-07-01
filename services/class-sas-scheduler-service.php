@@ -10,106 +10,79 @@ class SAS_Scheduler_Service {
         $this->settings_service = new SAS_Settings_Service();
     }
 
-    public function get_next_available_date($user_id = null) {
+    /**
+     * Find the next available publish slot for the given user and platform.
+     *
+     * Rules:
+     *  - Slots per day are defined by upload_times[] (one time per slot).
+     *  - uploads_per_day caps how many slots per platform per day are used.
+     *  - Each platform is scheduled independently (YouTube and Instagram fill
+     *    their own slots and don't share counts with each other).
+     *  - A slot is available when it is in the future AND not already taken by
+     *    another video on the same platform on the same day.
+     *  - If today's slots are all past or full, search forward day by day.
+     */
+    public function get_next_available_date($user_id = null, string $platform = ''): DateTime {
         if (is_null($user_id)) {
             $user_id = get_current_user_id();
         }
 
-        $upload_time     = $this->settings_service->get('upload_time', $user_id, '19:00');
-        $uploads_per_day = (int) $this->settings_service->get('uploads_per_day', $user_id, 1);
-        $weekdays        = $this->settings_service->get('weekdays', $user_id, ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']);
+        $upload_times    = $this->get_upload_times($user_id);
+        $uploads_per_day = min(
+            (int) $this->settings_service->get('uploads_per_day', $user_id, 1),
+            count($upload_times)
+        );
+        $weekdays = $this->settings_service->get(
+            'weekdays', $user_id, ['mon','tue','wed','thu','fri','sat','sun']
+        );
 
         $timezone_obj = wp_timezone();
         $now          = new DateTime('now', $timezone_obj);
-
-        $last_scheduled = $this->get_last_scheduled_date($user_id, $timezone_obj);
-
-        // If a future-scheduled video exists, start searching from the day after it
-        // so new videos land on their own day.
-        // If no future-scheduled video exists (none at all, or all are in the past),
-        // start from today — the $candidate > $now check below skips today if the
-        // upload time has already passed.
-        if ($last_scheduled && $last_scheduled > $now) {
-            $search_from = (clone $last_scheduled)->modify('+1 day')->setTime(0, 0, 0);
-        } else {
-            $search_from = (clone $now)->setTime(0, 0, 0);
-        }
+        $search_from  = (clone $now)->setTime(0, 0, 0);
 
         while (true) {
             if ($this->is_valid_weekday($search_from, $weekdays)) {
-                $candidate   = $this->apply_time(clone $search_from, $upload_time);
-                $slots_taken = (int) $this->get_uploads_for_date($search_from, $user_id);
+                $taken_times = $this->get_scheduled_times_for_day($search_from, $user_id, $platform);
 
-                if ($candidate > $now && $slots_taken < $uploads_per_day) {
-                    return $candidate;
+                if (count($taken_times) < $uploads_per_day) {
+                    foreach ($upload_times as $slot_time) {
+                        if (in_array($slot_time, $taken_times, true)) {
+                            continue; // Slot already used on this day
+                        }
+                        $candidate = $this->apply_time(clone $search_from, $slot_time);
+                        if ($candidate > $now) {
+                            return $candidate;
+                        }
+                    }
                 }
             }
             $search_from->modify('+1 day');
         }
     }
 
-    private function get_last_scheduled_date($user_id, $timezone_obj) {
-        global $wpdb;
-
-        $table_name = $wpdb->prefix . 'sas_videos';
-        $result = $wpdb->get_var($wpdb->prepare(
-            "SELECT MAX(publish_date) FROM $table_name WHERE user_id = %d AND status IN ('queued', 'scheduled', 'published')",
-            $user_id
-        ));
-
-        if ($result) {
-            return new DateTime($result, $timezone_obj);
-        }
-
-        return null;
-    }
-
-    private function get_uploads_for_date($date, $user_id) {
-        global $wpdb;
-
-        $table_name = $wpdb->prefix . 'sas_videos';
-        $date_start = $date->format('Y-m-d 00:00:00');
-        $date_end = $date->format('Y-m-d 23:59:59');
-
-        return $wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(*) FROM $table_name WHERE user_id = %d AND publish_date BETWEEN %s AND %s AND status IN ('queued', 'scheduled', 'published')",
-            $user_id,
-            $date_start,
-            $date_end
-        ));
-    }
-
-    private function is_valid_weekday($date, $weekdays) {
-        // $date->format('D') returns 'Mon','Tue',... – lowercase to match stored values
-        $day = strtolower($date->format('D')); // e.g. 'mon'
-
-        if (!is_array($weekdays)) {
-            $weekdays = ['mon','tue','wed','thu','fri','sat','sun'];
-        }
-
-        return in_array($day, array_map('strtolower', $weekdays), true);
-    }
-
-    private function apply_time($date, $time) {
-        list($hours, $minutes) = explode(':', $time);
-        $date->setTime((int)$hours, (int)$minutes, 0);
-        return $date;
-    }
-
-    public function schedule_video($video_id, $user_id = null) {
+    /**
+     * Schedule a video: looks up its platform from the DB, finds the next
+     * available slot for that platform, and writes the publish_date.
+     */
+    public function schedule_video($video_id, $user_id = null): DateTime {
         global $wpdb;
 
         if (is_null($user_id)) {
             $user_id = get_current_user_id();
         }
 
-        $next_date = $this->get_next_available_date($user_id);
+        $table    = $wpdb->prefix . 'sas_videos';
+        $platform = (string) $wpdb->get_var($wpdb->prepare(
+            "SELECT platform FROM $table WHERE id = %d AND user_id = %d",
+            $video_id, $user_id
+        ));
 
-        $table_name = $wpdb->prefix . 'sas_videos';
+        $next_date = $this->get_next_available_date($user_id, $platform);
+
         $wpdb->update(
-            $table_name,
+            $table,
             [
-                'status' => 'scheduled',
+                'status'       => 'scheduled',
                 'publish_date' => $next_date->format('Y-m-d H:i:s'),
             ],
             ['id' => $video_id, 'user_id' => $user_id],
@@ -118,5 +91,73 @@ class SAS_Scheduler_Service {
         );
 
         return $next_date;
+    }
+
+    // -------------------------------------------------------------------------
+    // Helpers
+    // -------------------------------------------------------------------------
+
+    /**
+     * Return the ordered list of upload times for this user.
+     * Falls back to the legacy single upload_time setting if upload_times is not set.
+     */
+    private function get_upload_times(int $user_id): array {
+        $times = $this->settings_service->get('upload_times', $user_id, null);
+
+        if (is_array($times) && !empty($times)) {
+            return array_values(array_filter($times));
+        }
+
+        // Legacy single-time fallback
+        $single = (string) $this->settings_service->get('upload_time', $user_id, '19:00');
+        return [$single ?: '19:00'];
+    }
+
+    /**
+     * Return the HH:MM times already scheduled for a given platform on a given
+     * day. Uses DATE_FORMAT so the result always matches the HH:MM format that
+     * upload_times stores.
+     */
+    private function get_scheduled_times_for_day(DateTime $date, int $user_id, string $platform): array {
+        global $wpdb;
+
+        $table      = $wpdb->prefix . 'sas_videos';
+        $date_start = $date->format('Y-m-d 00:00:00');
+        $date_end   = $date->format('Y-m-d 23:59:59');
+
+        if ($platform) {
+            // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+            $rows = $wpdb->get_col($wpdb->prepare(
+                "SELECT DATE_FORMAT(publish_date, '%%H:%%i') FROM $table
+                 WHERE user_id = %d AND platform = %s
+                   AND publish_date BETWEEN %s AND %s
+                   AND status IN ('queued','scheduled','published')",
+                $user_id, $platform, $date_start, $date_end
+            ));
+        } else {
+            // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+            $rows = $wpdb->get_col($wpdb->prepare(
+                "SELECT DATE_FORMAT(publish_date, '%%H:%%i') FROM $table
+                 WHERE user_id = %d
+                   AND publish_date BETWEEN %s AND %s
+                   AND status IN ('queued','scheduled','published')",
+                $user_id, $date_start, $date_end
+            ));
+        }
+
+        return $rows ?: [];
+    }
+
+    private function is_valid_weekday(DateTime $date, $weekdays): bool {
+        if (!is_array($weekdays)) {
+            $weekdays = ['mon','tue','wed','thu','fri','sat','sun'];
+        }
+        return in_array(strtolower($date->format('D')), array_map('strtolower', $weekdays), true);
+    }
+
+    private function apply_time(DateTime $date, string $time): DateTime {
+        [$hours, $minutes] = explode(':', $time);
+        $date->setTime((int) $hours, (int) $minutes, 0);
+        return $date;
     }
 }

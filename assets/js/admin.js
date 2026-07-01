@@ -845,7 +845,7 @@
                         <div class="sas-connected-account-row">
                             <span class="sas-connected-account-row__platform">${platformBadge(a.platform)}</span>
                             <span class="sas-connected-account-row__name">${esc(a.account_name)}</span>
-                            <span class="sas-connected-account-row__expires">${a.token_expires_at ? 'Expires: ' + formatDate(a.token_expires_at) : ''}</span>
+                            <span class="sas-connected-account-row__expires">${tokenExpiresLabel(a.token_expires_at)}</span>
                             <button class="sas-btn sas-btn--sm sas-btn--ghost sas-disconnect-btn" data-id="${esc(a.id)}">Disconnect</button>
                         </div>
                     `).join('');
@@ -872,18 +872,106 @@
     // =========================================================================
     // Settings
     // =========================================================================
+    // =========================================================================
+    // Upload-time slot helpers (used by Settings page)
+    // =========================================================================
+
+    function addMinutes(timeStr, minutes) {
+        const [h, m] = timeStr.split(':').map(Number);
+        const total  = h * 60 + m + minutes;
+        return `${String(Math.floor(total / 60) % 24).padStart(2,'0')}:${String(total % 60).padStart(2,'0')}`;
+    }
+
+    function renderUploadTimes(count, existingTimes = []) {
+        const container = document.getElementById('sas-upload-times-container');
+        if (!container) return;
+
+        const resolved = [];
+        for (let i = 0; i < count; i++) {
+            if (existingTimes[i]) {
+                resolved.push(existingTimes[i]);
+            } else {
+                resolved.push(addMinutes(resolved[i - 1] || '19:00', 5));
+            }
+        }
+
+        const grid = document.createElement('div');
+        grid.className = 'sas-upload-times-grid';
+
+        resolved.forEach((t, i) => {
+            const field = document.createElement('div');
+            field.className = 'sas-field';
+            field.innerHTML =
+                `<label for="sas-upload-time-${i}">Upload Time ${i + 1}</label>` +
+                `<input type="time" id="sas-upload-time-${i}" class="sas-input sas-upload-time-input" value="${esc(t)}" />`;
+            grid.appendChild(field);
+        });
+
+        container.innerHTML = '';
+        container.appendChild(grid);
+
+        container.querySelectorAll('.sas-upload-time-input').forEach(inp =>
+            inp.addEventListener('change', validateUploadTimes)
+        );
+        validateUploadTimes();
+    }
+
+    function validateUploadTimes() {
+        const inputs = [...document.querySelectorAll('.sas-upload-time-input')];
+        const values = inputs.map(i => i.value).filter(Boolean);
+
+        inputs.forEach(i => i.classList.remove('sas-input--error'));
+        if (values.length < 2) return true;
+
+        const toMin = t => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+        const sorted = [...values].map(toMin).sort((a, b) => a - b);
+
+        let ok = true;
+        for (let i = 1; i < sorted.length; i++) {
+            if (sorted[i] - sorted[i - 1] < 5) { ok = false; break; }
+        }
+
+        if (!ok) inputs.forEach(inp => { if (inp.value) inp.classList.add('sas-input--error'); });
+        return ok;
+    }
+
+    // =========================================================================
+    // Settings
+    // =========================================================================
     async function initSettings() {
         await loadSettings();
 
+        // Re-render time slots whenever the count changes
+        document.getElementById('sas-uploads-per-day')?.addEventListener('input', e => {
+            const count = Math.min(15, Math.max(1, parseInt(e.target.value) || 1));
+            const existingTimes = [...document.querySelectorAll('.sas-upload-time-input')].map(i => i.value);
+            renderUploadTimes(count, existingTimes);
+        });
+
         document.getElementById('sas-settings-form')?.addEventListener('submit', async e => {
             e.preventDefault();
+
+            if (!validateUploadTimes()) {
+                toast.error('Upload times must be at least 5 minutes apart and cannot repeat.');
+                return;
+            }
+
             const btn = document.getElementById('sas-save-settings-btn');
             btn.disabled    = true;
             btn.textContent = sasData.strings.saving;
 
+            // Auto-fill any blank time slots with previous + 5 min before collecting
+            const timeInputs = [...document.querySelectorAll('.sas-upload-time-input')];
+            timeInputs.forEach((inp, i) => {
+                if (!inp.value) {
+                    const prev = i > 0 ? timeInputs[i - 1].value : '19:00';
+                    inp.value = addMinutes(prev || '19:00', 5);
+                }
+            });
+
             const data = {
-                upload_time:         document.getElementById('sas-upload-time')?.value,
                 uploads_per_day:     document.getElementById('sas-uploads-per-day')?.value,
+                upload_times:        timeInputs.map(i => i.value).filter(Boolean),
                 weekdays:            [...document.querySelectorAll('input[name="weekdays[]"]:checked')].map(cb => cb.value),
                 default_description: document.getElementById('sas-default-description')?.value || '',
                 default_tags:        document.getElementById('sas-default-tags')?.value || '',
@@ -916,8 +1004,14 @@
         try {
             const s = await api.get('/settings');
 
-            if (s.upload_time)     setVal('sas-upload-time', s.upload_time);
             if (s.uploads_per_day) setVal('sas-uploads-per-day', s.uploads_per_day);
+
+            // Resolve which times to show: new upload_times array → legacy upload_time → default
+            const count = parseInt(s.uploads_per_day) || 1;
+            const times = Array.isArray(s.upload_times) && s.upload_times.length
+                ? s.upload_times
+                : s.upload_time ? [s.upload_time] : ['19:00'];
+            renderUploadTimes(count, times);
 
             if (s.weekdays && Array.isArray(s.weekdays)) {
                 document.querySelectorAll('input[name="weekdays[]"]').forEach(cb => {
@@ -1019,6 +1113,15 @@
     function formatDate(dateStr) {
         if (!dateStr) return '';
         return new Date(dateStr).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+    }
+
+    function tokenExpiresLabel(expiresAt) {
+        if (!expiresAt) return '';
+        const d = new Date(expiresAt.replace(' ', 'T') + 'Z');
+        if (d <= new Date()) {
+            return '<span title="Token auto-refreshes before each publish">Auto-refreshes when needed</span>';
+        }
+        return 'Expires: ' + d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
     }
 
     function statusBadge(status) {
