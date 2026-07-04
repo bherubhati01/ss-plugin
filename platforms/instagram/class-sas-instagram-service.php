@@ -25,7 +25,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  *   - Instagram → API setup with Instagram login → Business Login → enable it
  *   - Add permissions: instagram_business_basic, instagram_business_content_publish
  *   - Register redirect URI in Business Login settings (NOT in Facebook Login settings)
- *   - Redirect URI: {site}/wp-admin/admin.php?page=sas-accounts&sas_oauth=instagram
+ *   - Redirect URI: https://your-site.com/wp-admin/admin.php?page=sas-accounts&sas_oauth=instagram
  */
 class SAS_Instagram_Service {
 
@@ -81,14 +81,7 @@ class SAS_Instagram_Service {
 	}
 
 	private function get_redirect_uri(): string {
-		// Confirmed via the OAuth debug log: Meta's Business Login Configuration
-		// redirects to the bare admin.php URL regardless of what redirect_uri we
-		// request, ignoring the ?page=&sas_oauth= query string. The token
-		// exchange then rejects a redirect_uri that doesn't match what Meta
-		// actually used for the OAuth dialog, so we must request and exchange
-		// using this same bare URL. The callback handler detects Instagram from
-		// the state nonce since the sas_oauth param won't be present.
-		return admin_url( 'admin.php' );
+		return admin_url( 'admin.php?page=sas-accounts&sas_oauth=instagram' );
 	}
 
 	// ── OAuth: Step 1 — build the authorize URL ───────────────────────────────
