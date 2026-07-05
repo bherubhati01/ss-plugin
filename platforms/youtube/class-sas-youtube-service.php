@@ -27,116 +27,39 @@ class SAS_Youtube_Service {
     }
 
     // -------------------------------------------------------------------------
-    // Credentials (stored in plugin settings)
-    // -------------------------------------------------------------------------
-
-    private function get_client_id(int $user_id = 0): string {
-        $uid = $user_id ?: get_current_user_id();
-        return (new SAS_Settings_Service())->get('youtube_client_id', $uid, '');
-    }
-
-    private function get_client_secret(int $user_id = 0): string {
-        $uid = $user_id ?: get_current_user_id();
-        $enc = (new SAS_Settings_Service())->get('youtube_client_secret_enc', $uid, '');
-        return $enc ? SAS_Token_Service::decrypt($enc) : '';
-    }
-
-    private function get_redirect_uri(): string {
-        return admin_url('admin.php?page=sas-accounts&sas_oauth=youtube');
-    }
-
-    // -------------------------------------------------------------------------
-    // OAuth flow
+    // OAuth flow — backend handles credential storage and code exchange
     // -------------------------------------------------------------------------
 
     public function get_auth_url(): string {
-        $params = [
-            'response_type'   => 'code',
-            'client_id'       => $this->get_client_id(),
-            'redirect_uri'    => $this->get_redirect_uri(),
-            'scope'           => self::SCOPE,
-            'access_type'     => 'offline',
-            'prompt'          => 'consent',
-            'state'           => wp_create_nonce('sas_youtube_oauth'),
-        ];
-        return self::AUTH_URL . '?' . http_build_query($params);
+        $redirect_back = admin_url('admin.php?page=sas-accounts');
+        $result = SAS_Backend_Client::get(
+            '/api/v1/social-accounts/plugin/oauth/youtube/',
+            ['redirect_back' => $redirect_back]
+        );
+        if (is_wp_error($result) || empty($result['auth_url'])) {
+            throw new RuntimeException(
+                __('Could not retrieve YouTube authorization URL from backend. Check that YouTube is configured and enabled in the backend admin.', 'social-auto-scheduler')
+            );
+        }
+        return $result['auth_url'];
     }
 
     public function handle_callback(string $code, string $state): bool {
-        if (!wp_verify_nonce($state, 'sas_youtube_oauth')) {
-            throw new RuntimeException(__('Invalid OAuth state.', 'social-auto-scheduler'));
-        }
-
-        $response = wp_remote_post(self::TOKEN_URL, [
-            'timeout' => 30,
-            'body'    => [
-                'code'          => $code,
-                'client_id'     => $this->get_client_id(),
-                'client_secret' => $this->get_client_secret(),
-                'redirect_uri'  => $this->get_redirect_uri(),
-                'grant_type'    => 'authorization_code',
-            ],
-        ]);
-
-        $this->assert_response($response, 'youtube_oauth_callback');
-
-        $data = json_decode(wp_remote_retrieve_body($response), true);
-
-        if (empty($data['access_token'])) {
-            throw new RuntimeException(__('No access token in YouTube response.', 'social-auto-scheduler'));
-        }
-
-        // Fetch channel info for the account name
-        $channel = $this->fetch_channel_info($data['access_token']);
-        $expires_at = date('Y-m-d H:i:s', time() + (int) ($data['expires_in'] ?? 3600));
-
-        $this->token_service->save_account([
-            'platform'         => 'youtube',
-            'account_name'     => $channel['name'] ?? 'YouTube Channel',
-            'access_token'     => $data['access_token'],
-            'refresh_token'    => $data['refresh_token'] ?? '',
-            'token_expires_at' => $expires_at,
-            'metadata'         => $channel,
-        ]);
-
-        $this->log_service->info('youtube_connected', 'YouTube account connected', ['channel' => $channel]);
-        return true;
+        // OAuth callback is now handled entirely by the backend.
+        // The backend redirects back here with ?sas_connected=youtube on success.
+        $this->log_service->warning('youtube_callback_called', 'handle_callback() called but backend handles the OAuth exchange now.');
+        return false;
     }
 
     // -------------------------------------------------------------------------
-    // Token refresh
+    // Token refresh — delegated to backend (Celery task handles it automatically)
     // -------------------------------------------------------------------------
 
     public function refresh_token(array $account): array {
-        $user_id  = (int) ($account['user_id'] ?? 0);
-        $response = wp_remote_post(self::TOKEN_URL, [
-            'timeout' => 30,
-            'body'    => [
-                'refresh_token' => $account['refresh_token'],
-                'client_id'     => $this->get_client_id($user_id),
-                'client_secret' => $this->get_client_secret($user_id),
-                'grant_type'    => 'refresh_token',
-            ],
-        ]);
-
-        $this->assert_response($response, 'youtube_token_refresh');
-        $data = json_decode(wp_remote_retrieve_body($response), true);
-
-        if (empty($data['access_token'])) {
-            throw new RuntimeException(__('Token refresh failed.', 'social-auto-scheduler'));
-        }
-
-        $expires_at = date('Y-m-d H:i:s', time() + (int) ($data['expires_in'] ?? 3600));
-        $this->token_service->update_tokens(
-            (int) $account['id'],
-            $data['access_token'],
-            $data['refresh_token'] ?? null,
-            $expires_at
-        );
-
-        $this->log_service->info('youtube_token_refreshed', 'YouTube access token refreshed', [], null, (int) $account['id']);
-
-        return array_merge($account, ['access_token' => $data['access_token'], 'token_expires_at' => $expires_at]);
+        // Token refresh is handled server-side by the backend scheduler.
+        // Return the account unchanged; the backend will refresh before expiry.
+        $this->log_service->info('youtube_token_refresh_skipped', 'Token refresh is handled by the backend.', [], null, (int) ($account['id'] ?? 0));
+        return $account;
     }
 
     // -------------------------------------------------------------------------

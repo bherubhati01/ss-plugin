@@ -1,295 +1,147 @@
 <?php
-if (!defined('ABSPATH')) {
-    exit;
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
 }
 
 /**
- * Handles chunked and single-shot video uploads.
+ * Video upload service — thin client version.
  *
- * Supports uploading to one or multiple platforms in a single operation.
- * One file is stored on disk; one SAS video record is created per platform.
+ * Workflow:
+ *   1. Upload video to WordPress Media Library (standard WP API).
+ *   2. Get the publicly accessible attachment URL.
+ *   3. POST video URL + metadata to the backend.
+ *   4. Return the backend video ID.
  *
- * Chunked workflow:
- *   1. init_upload()    → upload_id
- *   2. receive_chunk()  × N
- *   3. finalize_upload() → array of video IDs (one per platform)
+ * The plugin no longer stores video files in a custom directory or manages
+ * a local video database. All scheduling and publishing happens in the backend.
  */
 class SAS_Upload_Service {
 
-    private const CHUNK_TRANSIENT_PREFIX = 'sas_upload_';
-    private const MAX_FILE_SIZE          = 5368709120; // 5 GB
-    private const ALLOWED_PLATFORMS      = ['youtube', 'instagram'];
+	private const ALLOWED_MIMES = [
+		'mp4'  => 'video/mp4',
+		'mov'  => 'video/quicktime',
+		'avi'  => 'video/x-msvideo',
+		'webm' => 'video/webm',
+	];
 
-    // -------------------------------------------------------------------------
-    // Init chunked upload
-    // -------------------------------------------------------------------------
+	private const MAX_FILE_SIZE = 5368709120; // 5 GB
 
-    public function init_upload(array $meta): array {
-        $file_size = (int) ($meta['file_size'] ?? 0);
-        if ($file_size > self::MAX_FILE_SIZE) {
-            throw new RuntimeException(
-                sprintf(__('File size %s exceeds 5 GB limit.', 'social-auto-scheduler'), SAS_Helpers::format_bytes($file_size))
-            );
-        }
+	// ── Single-file upload → backend ─────────────────────────────────────────
 
-        $upload_id    = SAS_Helpers::generate_unique_id();
-        $chunk_size   = (int) ($meta['chunk_size'] ?? 5242880);
-        $total_chunks = (int) ceil($file_size / max(1, $chunk_size));
+	/**
+	 * Upload a video to WordPress Media Library, then register it with the backend.
+	 *
+	 * @param array  $file       $_FILES entry.
+	 * @param array  $meta       {
+	 *   caption, description, tags (array), platform, social_account_id,
+	 *   scheduled_at (ISO 8601 string or null)
+	 * }
+	 * @return array Backend video object.
+	 * @throws RuntimeException On upload or backend error.
+	 */
+	public function upload_and_register( array $file, array $meta ): array {
+		$this->validate_file( $file );
 
-        // Accept 'platforms' array OR legacy 'platform' string
-        $platforms = self::sanitize_platforms($meta['platforms'] ?? $meta['platform'] ?? 'youtube');
+		$attachment_id = $this->upload_to_media_library( $file );
+		$file_url      = wp_get_attachment_url( $attachment_id );
+		$thumbnail_url = $this->get_thumbnail_url( $attachment_id );
 
-        $state = [
-            'upload_id'    => $upload_id,
-            'file_name'    => sanitize_file_name($meta['file_name'] ?? 'video.mp4'),
-            'file_size'    => $file_size,
-            'chunk_size'   => $chunk_size,
-            'total_chunks' => $total_chunks,
-            'received'     => [],
-            'platforms'    => $platforms,
-            'account_id'   => (int) ($meta['account_id'] ?? 0),
-            'user_id'      => get_current_user_id(),
-            'status'       => 'uploading',
-            'created_at'   => time(),
-        ];
+		if ( ! $file_url ) {
+			throw new RuntimeException( __( 'Could not retrieve URL for uploaded video.', 'social-auto-scheduler' ) );
+		}
 
-        set_transient(self::CHUNK_TRANSIENT_PREFIX . $upload_id, $state, 3600);
-        return ['upload_id' => $upload_id, 'total_chunks' => $total_chunks];
-    }
+		return $this->send_to_backend( $file_url, $thumbnail_url, $meta );
+	}
 
-    // -------------------------------------------------------------------------
-    // Receive chunk
-    // -------------------------------------------------------------------------
+	// ── Register a video URL that's already in the Media Library ─────────────
 
-    public function receive_chunk(string $upload_id, int $chunk_index, string $chunk_data): array {
-        $state     = $this->get_state($upload_id);
-        $chunk_dir = SAS_Helpers::get_temp_dir() . '/' . $upload_id;
+	/**
+	 * Register an existing WP Media Library attachment with the backend.
+	 * Called when the user selects an already-uploaded video.
+	 *
+	 * @param int   $attachment_id WP attachment post ID.
+	 * @param array $meta          Same as upload_and_register().
+	 * @return array Backend video object.
+	 */
+	public function register_attachment( int $attachment_id, array $meta ): array {
+		$file_url      = wp_get_attachment_url( $attachment_id );
+		$thumbnail_url = $this->get_thumbnail_url( $attachment_id );
 
-        if (!file_exists($chunk_dir)) {
-            wp_mkdir_p($chunk_dir);
-        }
+		if ( ! $file_url ) {
+			throw new RuntimeException( __( 'Invalid attachment ID.', 'social-auto-scheduler' ) );
+		}
 
-        // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
-        if (file_put_contents($chunk_dir . '/chunk_' . $chunk_index, $chunk_data) === false) {
-            throw new RuntimeException(__('Failed to save chunk to disk.', 'social-auto-scheduler'));
-        }
+		return $this->send_to_backend( $file_url, $thumbnail_url, $meta );
+	}
 
-        $state['received'][$chunk_index] = true;
-        set_transient(self::CHUNK_TRANSIENT_PREFIX . $upload_id, $state, 3600);
+	// ── Internal helpers ──────────────────────────────────────────────────────
 
-        $received = count($state['received']);
-        $total    = $state['total_chunks'];
+	private function validate_file( array $file ): void {
+		$info = wp_check_filetype( $file['name'], self::ALLOWED_MIMES );
+		if ( empty( $info['type'] ) ) {
+			throw new RuntimeException( __( 'Only MP4, MOV, AVI, and WEBM files are allowed.', 'social-auto-scheduler' ) );
+		}
+		if ( (int) $file['size'] > self::MAX_FILE_SIZE ) {
+			throw new RuntimeException( __( 'File exceeds the 5 GB size limit.', 'social-auto-scheduler' ) );
+		}
+	}
 
-        return [
-            'received' => $received,
-            'total'    => $total,
-            'percent'  => $total > 0 ? round(($received / $total) * 100) : 0,
-            'complete' => $received >= $total,
-        ];
-    }
+	private function upload_to_media_library( array $file ): int {
+		require_once ABSPATH . 'wp-admin/includes/file.php';
+		require_once ABSPATH . 'wp-admin/includes/media.php';
+		require_once ABSPATH . 'wp-admin/includes/image.php';
 
-    // -------------------------------------------------------------------------
-    // Finalize chunked upload → returns array of created video IDs
-    // -------------------------------------------------------------------------
+		$attachment_id = media_handle_upload_array( $file );
 
-    public function finalize_upload(string $upload_id): array {
-        $state = $this->get_state($upload_id);
+		if ( is_wp_error( $attachment_id ) ) {
+			throw new RuntimeException(
+				sprintf( __( 'Media Library upload failed: %s', 'social-auto-scheduler' ), $attachment_id->get_error_message() )
+			);
+		}
 
-        if (count($state['received']) < $state['total_chunks']) {
-            throw new RuntimeException(__('Not all chunks received.', 'social-auto-scheduler'));
-        }
+		return (int) $attachment_id;
+	}
 
-        $chunk_dir = SAS_Helpers::get_temp_dir() . '/' . $upload_id;
-        $dest_dir  = SAS_Helpers::get_upload_dir();
-        $dest_name = $upload_id . '_' . $state['file_name'];
-        $dest_file = $dest_dir . '/' . $dest_name;
-        $dest_url  = SAS_Helpers::get_upload_url() . '/' . $dest_name;
+	private function get_thumbnail_url( int $attachment_id ): string {
+		$thumb = wp_get_attachment_image_url( $attachment_id, 'large' );
+		return $thumb ?: '';
+	}
 
-        // Assemble chunks
-        $fp = fopen($dest_file, 'wb');
-        if (!$fp) {
-            throw new RuntimeException(__('Cannot create destination file.', 'social-auto-scheduler'));
-        }
+	private function send_to_backend( string $file_url, string $thumbnail_url, array $meta ): array {
+		if ( ! SAS_License_Manager::is_active() ) {
+			throw new RuntimeException( __( 'Plugin is not connected to the backend. Please activate your license.', 'social-auto-scheduler' ) );
+		}
 
-        for ($i = 0; $i < $state['total_chunks']; $i++) {
-            $chunk_file = $chunk_dir . '/chunk_' . $i;
-            if (!file_exists($chunk_file)) {
-                fclose($fp);
-                throw new RuntimeException(sprintf(__('Chunk %d missing.', 'social-auto-scheduler'), $i));
-            }
-            // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
-            fwrite($fp, file_get_contents($chunk_file));
-        }
-        fclose($fp);
+		$body = [
+			'file_url'          => $file_url,
+			'thumbnail_url'     => $thumbnail_url,
+			'caption'           => sanitize_text_field( $meta['caption'] ?? '' ),
+			'description'       => sanitize_textarea_field( $meta['description'] ?? '' ),
+			'tags'              => SAS_Helpers::sanitize_tags( $meta['tags'] ?? [] ),
+			'platform'          => sanitize_key( $meta['platform'] ?? 'instagram' ),
+			'social_account_id' => ! empty( $meta['social_account_id'] ) ? (int) $meta['social_account_id'] : null,
+			'scheduled_at'      => $meta['scheduled_at'] ?? null,
+		];
 
-        $this->cleanup_chunks($upload_id);
+		$result = SAS_Backend_Client::post( '/api/v1/videos/', $body );
 
-        if (!SAS_Helpers::is_valid_video_mime($dest_file)) {
-            unlink($dest_file);
-            throw new RuntimeException(__('Invalid video file type.', 'social-auto-scheduler'));
-        }
+		if ( is_wp_error( $result ) ) {
+			throw new RuntimeException( $result->get_error_message() );
+		}
 
-        $duration = SAS_Helpers::get_video_duration($dest_file);
-        $title    = pathinfo($state['file_name'], PATHINFO_FILENAME);
+		return $result;
+	}
+}
 
-        $video_ids = $this->create_video_records(
-            $dest_file,
-            $dest_url,
-            $title,
-            $state['platforms'],
-            $state['account_id'],
-            (int) filesize($dest_file),
-            $duration,
-            $state['user_id']
-        );
-
-        delete_transient(self::CHUNK_TRANSIENT_PREFIX . $upload_id);
-
-        return $video_ids;
-    }
-
-    // -------------------------------------------------------------------------
-    // Single-shot upload (small files) → returns array of created video IDs
-    // -------------------------------------------------------------------------
-
-    public function handle_single_upload(array $file, array $platforms, int $account_id = 0): array {
-        $allowed_mimes = ['mp4' => 'video/mp4', 'mov' => 'video/quicktime'];
-        $file_info     = wp_check_filetype($file['name'], $allowed_mimes);
-
-        if (empty($file_info['type'])) {
-            throw new RuntimeException(__('Only MP4 and MOV files are allowed.', 'social-auto-scheduler'));
-        }
-
-        if ($file['size'] > self::MAX_FILE_SIZE) {
-            throw new RuntimeException(__('File exceeds 5 GB size limit.', 'social-auto-scheduler'));
-        }
-
-        $platforms = self::sanitize_platforms($platforms);
-
-        $dest_dir  = SAS_Helpers::get_upload_dir();
-        $dest_name = SAS_Helpers::generate_unique_id() . '_' . sanitize_file_name($file['name']);
-        $dest_file = $dest_dir . '/' . $dest_name;
-        $dest_url  = SAS_Helpers::get_upload_url() . '/' . $dest_name;
-
-        if (!move_uploaded_file($file['tmp_name'], $dest_file)) {
-            throw new RuntimeException(__('Failed to move uploaded file.', 'social-auto-scheduler'));
-        }
-
-        if (!SAS_Helpers::is_valid_video_mime($dest_file)) {
-            unlink($dest_file);
-            throw new RuntimeException(__('Invalid video file.', 'social-auto-scheduler'));
-        }
-
-        $duration = SAS_Helpers::get_video_duration($dest_file);
-        $title    = pathinfo($file['name'], PATHINFO_FILENAME);
-
-        return $this->create_video_records(
-            $dest_file,
-            $dest_url,
-            $title,
-            $platforms,
-            $account_id,
-            (int) filesize($dest_file),
-            $duration,
-            get_current_user_id()
-        );
-    }
-
-    // -------------------------------------------------------------------------
-    // Shared: create one video record per platform from the same file
-    // -------------------------------------------------------------------------
-
-    private function create_video_records(
-        string $file_path,
-        string $file_url,
-        string $title,
-        array  $platforms,
-        int    $account_id,
-        int    $file_size,
-        int    $duration,
-        int    $user_id
-    ): array {
-        $video_service = new SAS_Video_Service();
-        $settings      = new SAS_Settings_Service();
-        $default_desc  = (string) $settings->get('default_description', $user_id, '');
-        $default_tags  = SAS_Helpers::sanitize_tags((string) $settings->get('default_tags', $user_id, ''));
-        $ids           = [];
-
-        foreach ($platforms as $platform) {
-            $ids[] = $video_service->create([
-                'file_path'   => $file_path,
-                'file_url'    => $file_url,
-                'title'       => $title,
-                'description' => $default_desc,
-                'tags'        => $default_tags,
-                'platform'    => $platform,
-                'account_id'  => $account_id,
-                'file_size'   => $file_size,
-                'duration'    => $duration,
-            ], $user_id);
-        }
-
-        return $ids;
-    }
-
-    // -------------------------------------------------------------------------
-    // Status check (chunked uploads)
-    // -------------------------------------------------------------------------
-
-    public function get_status(string $upload_id): array {
-        $state = get_transient(self::CHUNK_TRANSIENT_PREFIX . $upload_id);
-        if (!$state) {
-            return ['status' => 'not_found'];
-        }
-        $total    = $state['total_chunks'];
-        $received = count($state['received']);
-        return [
-            'status'    => $state['status'],
-            'percent'   => $total > 0 ? round(($received / $total) * 100) : 0,
-            'received'  => $received,
-            'total'     => $total,
-            'platforms' => $state['platforms'],
-        ];
-    }
-
-    // -------------------------------------------------------------------------
-    // Helpers
-    // -------------------------------------------------------------------------
-
-    private function get_state(string $upload_id): array {
-        $state = get_transient(self::CHUNK_TRANSIENT_PREFIX . $upload_id);
-        if (!$state) {
-            throw new RuntimeException(__('Upload session expired or not found.', 'social-auto-scheduler'));
-        }
-        return $state;
-    }
-
-    private function cleanup_chunks(string $upload_id): void {
-        $chunk_dir = SAS_Helpers::get_temp_dir() . '/' . $upload_id;
-        if (!is_dir($chunk_dir)) {
-            return;
-        }
-        foreach (glob($chunk_dir . '/chunk_*') ?: [] as $file) {
-            unlink($file);
-        }
-        rmdir($chunk_dir);
-    }
-
-    /**
-     * Normalise platform input → validated array of platform slugs.
-     * Accepts string, comma-separated string, or array.
-     */
-    public static function sanitize_platforms(mixed $input): array {
-        if (is_string($input)) {
-            $input = array_map('trim', explode(',', $input));
-        }
-        if (!is_array($input)) {
-            $input = ['youtube'];
-        }
-        $platforms = array_values(array_filter(array_map(
-            fn($p) => in_array(sanitize_key($p), self::ALLOWED_PLATFORMS, true) ? sanitize_key($p) : null,
-            $input
-        )));
-        return $platforms ?: ['youtube'];
-    }
+/**
+ * Compatibility shim: wraps $_FILES format into WP's media_handle_upload.
+ * WP's media_handle_upload() only takes a file key from $_FILES; this helper
+ * moves a file into the $_FILES superglobal temporarily so WP can process it.
+ */
+function media_handle_upload_array( array $file ): int|WP_Error {
+	$key = '_sas_tmp_upload_' . uniqid();
+	$_FILES[ $key ] = $file;
+	$result = media_handle_upload( $key, 0, [], [ 'test_form' => false ] );
+	unset( $_FILES[ $key ] );
+	return $result;
 }

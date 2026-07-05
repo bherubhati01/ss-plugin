@@ -27,6 +27,7 @@ class SAS_Admin {
             ['sas-accounts',  __('Accounts',  'social-auto-scheduler'), [$this, 'render_accounts']],
             ['sas-settings',  __('Settings',  'social-auto-scheduler'), [$this, 'render_settings']],
             ['sas-logs',      __('Logs',      'social-auto-scheduler'), [$this, 'render_logs']],
+            ['sas-license',   __('License',   'social-auto-scheduler'), [$this, 'render_license']],
         ];
 
         foreach ($pages as [$slug, $label, $cb]) {
@@ -79,99 +80,39 @@ class SAS_Admin {
     }
 
     // -------------------------------------------------------------------------
-    // OAuth callback (fires on admin_init)
+    // OAuth result handler (fires on admin_init)
+    // The backend now handles the OAuth code exchange and redirects back here
+    // with ?sas_connected=<platform> on success or ?sas_error=<code> on failure.
     // -------------------------------------------------------------------------
 
     public function handle_oauth_callback(): void {
-        // Write a marker the moment any OAuth params appear so we can tell
-        // whether THIS version of the file is running on the live server.
-        if ( ! empty( $_GET['code'] ) || ! empty( $_GET['error'] ) ) {
-            update_option( 'sas_oauth_debug', [
-                'v'          => '1.0.2',
-                'time'       => gmdate( 'Y-m-d H:i:s' ),
-                'user_id'    => get_current_user_id(),
-                'can_manage' => current_user_can( 'manage_options' ),
-                'sas_oauth'  => sanitize_key( $_GET['sas_oauth'] ?? '' ),
-                'has_code'   => ! empty( $_GET['code'] ),
-                'has_state'  => ! empty( $_GET['state'] ),
-                'step'       => 'started',
-            ] );
-        }
-
         if ( ! current_user_can( 'manage_options' ) ) {
-            $this->_debug( [ 'step' => 'STOPPED: no manage_options cap' ] );
             return;
         }
 
-        $oauth = sanitize_key( $_GET['sas_oauth'] ?? '' );
-        $code  = sanitize_text_field( $_GET['code']  ?? '' );
-        $state = sanitize_text_field( $_GET['state'] ?? '' );
-        $error = sanitize_text_field( $_GET['error'] ?? '' );
+        $connected = sanitize_key( $_GET['sas_connected'] ?? '' );
+        $error     = sanitize_text_field( $_GET['sas_error'] ?? '' );
 
-        if ( empty( $code ) && empty( $error ) ) {
-            return;
-        }
-
-        if ( empty( $oauth ) && ! empty( $state ) ) {
-            $nonce_ig = wp_verify_nonce( $state, 'sas_instagram_oauth' );
-            $nonce_yt = wp_verify_nonce( $state, 'sas_youtube_oauth' );
-            $this->_debug( [
-                'step'     => 'nonce_check',
-                'nonce_ig' => $nonce_ig,
-                'nonce_yt' => $nonce_yt,
-                'state_len' => strlen( $state ),
+        if ( $connected ) {
+            $label = $connected === 'youtube' ? 'YouTube' : 'Instagram';
+            set_transient( 'sas_oauth_success', $connected, 60 );
+            update_option( 'sas_oauth_debug', [
+                'v'        => '1.0.3',
+                'time'     => gmdate( 'Y-m-d H:i:s' ),
+                'platform' => $connected,
+                'step'     => "SUCCESS:{$label}",
             ] );
-            if ( $nonce_ig ) {
-                $oauth = 'instagram';
-            } elseif ( $nonce_yt ) {
-                $oauth = 'youtube';
-            }
-        }
-
-        if ( empty( $oauth ) ) {
-            $this->_debug( [ 'step' => 'STOPPED: could not detect platform from state nonce' ] );
             return;
         }
 
         if ( $error ) {
-            set_transient( 'sas_oauth_error', $error, 30 );
-            wp_redirect( admin_url( 'admin.php?page=sas-accounts' ) );
-            exit;
-        }
-
-        $this->_debug( [ 'step' => 'processing', 'platform' => $oauth ] );
-
-        try {
-            if ( $oauth === 'youtube' ) {
-                $service = new SAS_Youtube_Service();
-                $service->handle_callback( $code, $state );
-                set_transient( 'sas_oauth_success', 'youtube', 30 );
-            } elseif ( $oauth === 'instagram' ) {
-                $service = new SAS_Instagram_Service();
-                $service->handle_callback( $code, $state );
-                set_transient( 'sas_oauth_success', 'instagram', 30 );
-            }
-            $this->_debug( [ 'step' => 'SUCCESS', 'platform' => $oauth ] );
-        } catch ( \Throwable $e ) {
-            // \Throwable catches both Exception and PHP 8 Error (fatal errors,
-            // "class not found", etc.) that Exception alone would miss.
-            $this->_debug( [
-                'step'  => 'EXCEPTION',
-                'class' => get_class( $e ),
-                'msg'   => $e->getMessage(),
-                'line'  => $e->getLine(),
-                'file'  => basename( $e->getFile() ),
+            set_transient( 'sas_oauth_error', $error, 60 );
+            update_option( 'sas_oauth_debug', [
+                'v'    => '1.0.3',
+                'time' => gmdate( 'Y-m-d H:i:s' ),
+                'step' => "ERROR:{$error}",
             ] );
-            set_transient( 'sas_oauth_error', $e->getMessage(), 30 );
         }
-
-        wp_redirect( admin_url( 'admin.php?page=sas-accounts' ) );
-        exit;
-    }
-
-    private function _debug( array $extra ): void {
-        $current = get_option( 'sas_oauth_debug', [] );
-        update_option( 'sas_oauth_debug', array_merge( (array) $current, $extra ) );
     }
 
     // -------------------------------------------------------------------------
@@ -200,5 +141,51 @@ class SAS_Admin {
 
     public function render_logs(): void {
         require_once SAS_PLUGIN_DIR . 'admin/templates/logs.php';
+    }
+
+    public function render_license(): void {
+        require_once SAS_PLUGIN_DIR . 'admin/templates/license.php';
+    }
+
+    // -------------------------------------------------------------------------
+    // License activation / deactivation (admin-post.php handlers)
+    // -------------------------------------------------------------------------
+
+    public function handle_license_activation(): void {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_die( __( 'Insufficient permissions.', 'social-auto-scheduler' ) );
+        }
+
+        check_admin_referer( 'sas_activate_license' );
+
+        $token      = sanitize_text_field( $_POST['sas_license_token'] ?? '' );
+        $backend_url = esc_url_raw( $_POST['sas_backend_url'] ?? '' );
+
+        if ( $backend_url ) {
+            SAS_Backend_Client::set_backend_url( $backend_url );
+        }
+
+        $result = SAS_License_Manager::activate( $token );
+
+        if ( is_wp_error( $result ) ) {
+            set_transient( 'sas_license_error', $result->get_error_message(), 30 );
+        } else {
+            set_transient( 'sas_license_success', __( 'License activated successfully.', 'social-auto-scheduler' ), 30 );
+        }
+
+        wp_redirect( admin_url( 'admin.php?page=sas-license' ) );
+        exit;
+    }
+
+    public function handle_license_deactivation(): void {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_die( __( 'Insufficient permissions.', 'social-auto-scheduler' ) );
+        }
+
+        check_admin_referer( 'sas_deactivate_license' );
+        SAS_License_Manager::deactivate();
+        set_transient( 'sas_license_success', __( 'License deactivated.', 'social-auto-scheduler' ), 30 );
+        wp_redirect( admin_url( 'admin.php?page=sas-license' ) );
+        exit;
     }
 }

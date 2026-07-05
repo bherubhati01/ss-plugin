@@ -1,124 +1,76 @@
 <?php
-if (!defined('ABSPATH')) {
-    exit;
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
 }
 
+/**
+ * Plugin-side cron: syncs video statuses from the backend.
+ *
+ * Publishing is now handled entirely by the backend's Celery scheduler.
+ * This cron only:
+ *   1. Verifies the license periodically.
+ *   2. Syncs video statuses (published/failed) from the backend to local cache.
+ *   3. Syncs plugin metadata to the backend (heartbeat).
+ */
 class SAS_Cron {
 
-    private SAS_Log_Service   $log_service;
-    private SAS_Video_Service $video_service;
-    private SAS_Queue_Service $queue_service;
+	private SAS_Log_Service $log_service;
 
-    public function __construct() {
-        $this->log_service   = new SAS_Log_Service();
-        $this->video_service = new SAS_Video_Service();
-        $this->queue_service = new SAS_Queue_Service();
-    }
+	public function __construct() {
+		$this->log_service = new SAS_Log_Service();
+	}
 
-    public function run(): void {
-        // Global cron lock – prevents concurrent execution
-        $lock_key = 'sas_cron_running';
-        if (get_transient($lock_key)) {
-            return;
-        }
-        set_transient($lock_key, 1, 300);
+	public function run(): void {
+		$lock_key = 'sas_cron_running';
+		if ( get_transient( $lock_key ) ) {
+			return;
+		}
+		set_transient( $lock_key, 1, 300 );
 
-        try {
-            $this->move_due_videos_to_queue();
-            $this->process_queue();
-        } finally {
-            delete_transient($lock_key);
-        }
-    }
+		try {
+			SAS_License_Manager::verify_periodically();
+			$this->sync_from_backend();
+			$this->heartbeat();
+		} catch ( Throwable $e ) {
+			$this->log_service->error( 'cron_error', $e->getMessage() );
+		} finally {
+			delete_transient( $lock_key );
+		}
+	}
 
-    // -------------------------------------------------------------------------
-    // Move scheduled videos whose publish_date has passed into the queue
-    // -------------------------------------------------------------------------
+	// ── Sync video statuses from backend ─────────────────────────────────────
 
-    private function move_due_videos_to_queue(): void {
-        global $wpdb;
+	private function sync_from_backend(): void {
+		if ( ! SAS_License_Manager::is_active() ) {
+			return;
+		}
 
-        $table = $wpdb->prefix . 'sas_videos';
-        $now   = current_time('mysql');
+		$result = SAS_Backend_Client::get( '/api/v1/videos/', [
+			'status'    => 'published',
+			'page_size' => 50,
+		] );
 
-        $videos = $wpdb->get_results($wpdb->prepare(
-            "SELECT * FROM $table WHERE status = 'scheduled' AND publish_date <= %s",
-            $now
-        ), ARRAY_A) ?: [];
+		if ( is_wp_error( $result ) ) {
+			$this->log_service->warning( 'cron_sync_failed', $result->get_error_message() );
+			return;
+		}
 
-        foreach ($videos as $video) {
-            $wpdb->update($table, ['status' => 'queued'], ['id' => $video['id']]);
-            $this->queue_service->add((int) $video['id']);
-            $this->log_service->info('cron_queued', 'Video moved to queue', [], (int) $video['id']);
-        }
-    }
+		// Cache the synced video list so admin templates can display it without
+		// making a live API call on every page load.
+		set_transient( 'sas_synced_videos', $result, 5 * MINUTE_IN_SECONDS );
+		$this->log_service->info( 'cron_sync', 'Video sync complete' );
+	}
 
-    // -------------------------------------------------------------------------
-    // Process the queue
-    // -------------------------------------------------------------------------
+	// ── Heartbeat: update plugin metadata on backend ─────────────────────────
 
-    private function process_queue(): void {
-        $items    = $this->queue_service->get_next(3);
-        $lock_key = uniqid('sas_item_', true);
+	private function heartbeat(): void {
+		if ( ! SAS_License_Manager::is_active() ) {
+			return;
+		}
 
-        foreach ($items as $item) {
-            // Per-item lock
-            if (!$this->queue_service->lock((int) $item['id'], $lock_key)) {
-                continue;
-            }
-
-            // Fetch video WITHOUT user restriction (cron has no current user)
-            $video = $this->video_service->get((int) $item['video_id']);
-
-            if (!$video) {
-                $this->queue_service->release((int) $item['id']);
-                continue;
-            }
-
-            try {
-                $this->publish_video($video, $item);
-                $this->queue_service->complete((int) $item['id']);
-                $this->video_service->update((int) $video['id'], [
-                    'status'       => 'published',
-                    'published_at' => current_time('mysql'),
-                    'error_message' => null,
-                ]);
-                $this->log_service->info('cron_published', 'Video published', [], (int) $video['id']);
-            } catch (Throwable $e) {
-                $this->log_service->error('cron_publish_failed', $e->getMessage(), [], (int) $video['id']);
-                $this->queue_service->fail((int) $item['id']);
-                $this->video_service->update((int) $video['id'], [
-                    'status'        => 'failed',
-                    'error_message' => $e->getMessage(),
-                ]);
-            }
-        }
-    }
-
-    private function publish_video(array $video, array $queue_item): void {
-        $this->video_service->update((int) $video['id'], ['status' => 'publishing']);
-
-        $platform = strtolower($video['platform']);
-        $service  = $this->get_platform_service($platform);
-
-        if (!$service) {
-            throw new RuntimeException(sprintf(__('No service found for platform: %s', 'social-auto-scheduler'), $platform));
-        }
-
-        $service->publish_video($video);
-    }
-
-    private function get_platform_service(string $platform): ?object {
-        $map = [
-            'youtube'   => SAS_Youtube_Service::class,
-            'instagram' => SAS_Instagram_Service::class,
-        ];
-
-        $class = $map[$platform] ?? null;
-        if ($class && class_exists($class)) {
-            return new $class();
-        }
-
-        return null;
-    }
+		SAS_Backend_Client::post( '/api/v1/websites/sync/', [
+			'plugin_version'    => SAS_VERSION,
+			'wordpress_version' => get_bloginfo( 'version' ),
+		] );
+	}
 }

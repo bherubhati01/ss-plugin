@@ -23,6 +23,12 @@ define('SAS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SAS_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('SAS_PLUGIN_BASENAME', plugin_basename(__FILE__));
 
+// Default backend URL — can be overridden via wp-config.php:
+//   define('SAS_BACKEND_URL', 'https://api.soulitam.com');
+if (!defined('SAS_BACKEND_URL')) {
+    define('SAS_BACKEND_URL', 'https://api.soulitam.com');
+}
+
 require_once SAS_PLUGIN_DIR . 'includes/class-sas-autoloader.php';
 require_once SAS_PLUGIN_DIR . 'database/class-sas-installer.php';
 require_once SAS_PLUGIN_DIR . 'includes/class-sas-plugin.php';

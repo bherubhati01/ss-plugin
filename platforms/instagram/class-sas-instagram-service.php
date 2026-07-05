@@ -65,166 +65,29 @@ class SAS_Instagram_Service {
 		$this->log_service   = new SAS_Log_Service();
 	}
 
-	// ── Credentials ───────────────────────────────────────────────────────────
-
-	private function get_app_id(): string {
-		return trim( (string) ( new SAS_Settings_Service() )->get( 'instagram_app_id', null, '' ) );
-	}
-
-	private function get_app_secret(): string {
-		$enc = (string) ( new SAS_Settings_Service() )->get( 'instagram_app_secret_enc', null, '' );
-		return $enc ? SAS_Token_Service::decrypt( $enc ) : '';
-	}
-
-	private function get_config_id(): string {
-		return trim( (string) ( new SAS_Settings_Service() )->get( 'instagram_config_id', null, '' ) );
-	}
-
-	private function get_redirect_uri(): string {
-		return admin_url( 'admin.php?page=sas-accounts&sas_oauth=instagram' );
-	}
-
-	// ── OAuth: Step 1 — build the authorize URL ───────────────────────────────
+	// ── OAuth: Step 1 — get the authorize URL from backend ───────────────────
 
 	public function get_auth_url(): string {
-		$config_id = $this->get_config_id();
-
-		$params = [
-			'client_id'     => $this->get_app_id(),
-			'redirect_uri'  => $this->get_redirect_uri(),
-			'response_type' => 'code',
-			'state'         => wp_create_nonce( 'sas_instagram_oauth' ),
-		];
-
-		if ( $config_id ) {
-			// New Meta Developer Console flow (2024+): use a Business Login
-			// Configuration ID. The config bundles permissions + redirect URIs,
-			// so scope / enable_fb_login are NOT sent.
-			$params['config_id'] = $config_id;
-		} else {
-			// Legacy scope-based flow (still works when config_id is not used).
-			$params['scope']           = self::SCOPE;
-			$params['enable_fb_login'] = '0';
+		$redirect_back = admin_url( 'admin.php?page=sas-accounts' );
+		$result = SAS_Backend_Client::get(
+			'/api/v1/social-accounts/plugin/oauth/instagram/',
+			[ 'redirect_back' => $redirect_back ]
+		);
+		if ( is_wp_error( $result ) || empty( $result['auth_url'] ) ) {
+			throw new RuntimeException(
+				__( 'Could not retrieve Instagram authorization URL from backend. Check that Instagram is configured and enabled in the backend admin.', 'social-auto-scheduler' )
+			);
 		}
-
-		return self::AUTHORIZE_URL . '?' . http_build_query( $params );
+		return $result['auth_url'];
 	}
 
-	// ── OAuth: Steps 2-4 — handle the callback ───────────────────────────────
+	// ── OAuth: callback is now handled by the backend ─────────────────────────
 
 	public function handle_callback( string $code, string $state ): bool {
-		if ( ! wp_verify_nonce( $state, 'sas_instagram_oauth' ) ) {
-			throw new RuntimeException( __( 'Invalid OAuth state.', 'social-auto-scheduler' ) );
-		}
-
-		// Step 2: Exchange authorization code → short-lived token.
-		// MUST be POST (not GET) with Content-Type: application/x-www-form-urlencoded.
-		$short_data    = $this->exchange_code_for_token( $code );
-		$short_token   = $short_data['access_token'];
-		$token_user_id = isset( $short_data['user_id'] ) ? (string) $short_data['user_id'] : null;
-
-		// Step 3: Exchange short-lived → long-lived token (60 days).
-		// Uses graph.instagram.com with grant_type=ig_exchange_token (NOT fb_exchange_token).
-		$long_data  = $this->get_long_lived_token( $short_token );
-		$long_token = $long_data['access_token'];
-		$expires_in = isset( $long_data['expires_in'] ) ? (int) $long_data['expires_in'] : 5184000;
-
-		// Step 4: Fetch user profile from graph.instagram.com/me.
-		// No Facebook Pages traversal — Business Login provides the IG user ID directly.
-		$user_info = $this->get_user_info( $long_token, $token_user_id );
-
-		$expires_at = gmdate( 'Y-m-d H:i:s', time() + $expires_in );
-
-		$this->token_service->save_account(
-			[
-				'platform'         => 'instagram',
-				'account_name'     => $user_info['username'] ?? 'Instagram Account',
-				'access_token'     => $long_token,
-				'refresh_token'    => '',
-				'token_expires_at' => $expires_at,
-				'metadata'         => $user_info,
-			]
-		);
-
-		$this->log_service->info(
-			'instagram_connected',
-			'Instagram account connected via Business Login',
-			[ 'account' => $user_info ]
-		);
-
-		return true;
-	}
-
-	// ── Token management ──────────────────────────────────────────────────────
-
-	/**
-	 * POST https://api.instagram.com/oauth/access_token
-	 *
-	 * Exchange the one-time authorization code for a short-lived Instagram
-	 * User access token (~1 hour). Returns the full response array which
-	 * includes `access_token` and `user_id`.
-	 */
-	private function exchange_code_for_token( string $code ): array {
-		$response = wp_remote_post(
-			self::TOKEN_URL,
-			[
-				'timeout' => 30,
-				'headers' => [ 'Content-Type' => 'application/x-www-form-urlencoded' ],
-				'body'    => [
-					'client_id'     => $this->get_app_id(),
-					'client_secret' => $this->get_app_secret(),
-					'grant_type'    => 'authorization_code',
-					'redirect_uri'  => $this->get_redirect_uri(),
-					'code'          => $code,
-				],
-			]
-		);
-
-		$this->assert_response( $response, 'instagram_code_exchange' );
-		$data = json_decode( wp_remote_retrieve_body( $response ), true );
-
-		if ( empty( $data['access_token'] ) ) {
-			$err = $data['error_message'] ?? $data['error']['message'] ?? 'No access_token in response';
-			throw new RuntimeException( 'Instagram token exchange failed: ' . $err );
-		}
-
-		return $data;
-	}
-
-	/**
-	 * GET https://graph.instagram.com/access_token
-	 *     ?grant_type=ig_exchange_token
-	 *     &client_secret={secret}
-	 *     &access_token={short_lived_token}
-	 *
-	 * Returns array with `access_token` (long-lived) and `expires_in` (seconds).
-	 * Note: NO client_id parameter. Grant type is ig_exchange_token, NOT fb_exchange_token.
-	 */
-	private function get_long_lived_token( string $short_token ): array {
-		$response = wp_remote_get(
-			self::LONG_TOKEN_URL . '?' . http_build_query(
-				[
-					'grant_type'    => 'ig_exchange_token',
-					'client_secret' => $this->get_app_secret(),
-					'access_token'  => $short_token,
-				]
-			),
-			[ 'timeout' => 30 ]
-		);
-
-		$this->assert_response( $response, 'instagram_long_token' );
-		$data = json_decode( wp_remote_retrieve_body( $response ), true );
-
-		if ( empty( $data['access_token'] ) ) {
-			// Non-fatal fallback — continue with the short-lived token.
-			$this->log_service->warning(
-				'instagram_long_token',
-				'Long-lived token exchange returned no token; falling back to short-lived (~1 hour).'
-			);
-			return [ 'access_token' => $short_token, 'expires_in' => 3600 ];
-		}
-
-		return $data;
+		// OAuth callback is now handled entirely by the backend.
+		// The backend redirects back here with ?sas_connected=instagram on success.
+		$this->log_service->warning( 'instagram_callback_called', 'handle_callback() called but backend handles the OAuth exchange now.' );
+		return false;
 	}
 
 	/**

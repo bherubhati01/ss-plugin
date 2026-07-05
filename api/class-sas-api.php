@@ -461,47 +461,21 @@ class SAS_API {
     // =========================================================================
 
     public function youtube_oauth_url(): WP_REST_Response|WP_Error {
-        $settings = new SAS_Settings_Service();
-        if (!$settings->get('youtube_client_id')) {
-            return new WP_Error('no_credentials', __('YouTube Client ID not configured.', 'social-auto-scheduler'), ['status' => 400]);
+        try {
+            $service = new SAS_Youtube_Service();
+            return new WP_REST_Response( [ 'url' => $service->get_auth_url() ], 200 );
+        } catch ( \Throwable $e ) {
+            return new WP_Error( 'oauth_error', $e->getMessage(), [ 'status' => 400 ] );
         }
-        $service = new SAS_Youtube_Service();
-        return new WP_REST_Response(['url' => $service->get_auth_url()], 200);
     }
 
     public function instagram_oauth_url(): WP_REST_Response|WP_Error {
-        $settings  = new SAS_Settings_Service();
-        $app_id    = trim( (string) $settings->get( 'instagram_app_id', null, '' ) );
-        $config_id = trim( (string) $settings->get( 'instagram_config_id', null, '' ) );
-
-        if ( empty( $app_id ) ) {
-            return new WP_Error(
-                'no_credentials',
-                __( 'Instagram App ID not configured. Go to Settings → Instagram / Meta API and enter your App ID.', 'social-auto-scheduler' ),
-                [ 'status' => 400 ]
-            );
+        try {
+            $service = new SAS_Instagram_Service();
+            return new WP_REST_Response( [ 'url' => $service->get_auth_url() ], 200 );
+        } catch ( \Throwable $e ) {
+            return new WP_Error( 'oauth_error', $e->getMessage(), [ 'status' => 400 ] );
         }
-
-        if ( ! ctype_digit( $app_id ) ) {
-            return new WP_Error(
-                'invalid_app_id',
-                __( 'Instagram App ID must be a numeric value (e.g. 1234567890). It is the number shown at the top of your Meta Developer app dashboard — NOT a name or URL.', 'social-auto-scheduler' ),
-                [ 'status' => 400 ]
-            );
-        }
-
-        // App Secret is required for the token exchange step (Step 2) regardless
-        // of whether config_id or scope is used, so always validate it here.
-        if ( ! $settings->get( 'instagram_app_secret_enc' ) ) {
-            return new WP_Error(
-                'no_secret',
-                __( 'Instagram App Secret not configured. Go to Settings → Instagram / Meta API and enter your App Secret.', 'social-auto-scheduler' ),
-                [ 'status' => 400 ]
-            );
-        }
-
-        $service = new SAS_Instagram_Service();
-        return new WP_REST_Response( [ 'url' => $service->get_auth_url(), 'using_config_id' => ! empty( $config_id ) ], 200 );
     }
 
     // =========================================================================
