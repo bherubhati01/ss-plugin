@@ -9,8 +9,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * create an account and generate a free license key.
  */
 
-$sas_frontend  = untrailingslashit( SAS_FRONTEND_URL );
-$sas_backend   = SAS_Backend_Client::get_backend_url() ?: SAS_BACKEND_URL;
+$sas_frontend = untrailingslashit( SAS_FRONTEND_URL );
 
 $gate_error   = get_transient( 'sas_license_error' );   delete_transient( 'sas_license_error' );
 $gate_success = get_transient( 'sas_license_success' ); delete_transient( 'sas_license_success' );
@@ -80,7 +79,6 @@ $gate_success = get_transient( 'sas_license_success' ); delete_transient( 'sas_l
             <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" class="sas-gate-form">
                 <?php wp_nonce_field( 'sas_activate_license' ); ?>
                 <input type="hidden" name="action" value="sas_activate_license">
-                <input type="hidden" name="sas_backend_url" value="<?php echo esc_attr( $sas_backend ); ?>">
                 <input type="text" name="sas_license_token" class="sas-gate-input"
                        placeholder="<?php esc_attr_e( 'Paste your license key — XXXX-XXXX-XXXX-XXXX', 'social-auto-scheduler' ); ?>"
                        required autocomplete="off">
@@ -92,9 +90,9 @@ $gate_success = get_transient( 'sas_license_success' ); delete_transient( 'sas_l
             <p class="sas-gate-foot">
                 <?php
                 printf(
-                    /* translators: %s: link to the license page */
-                    esc_html__( 'Advanced options (custom backend URL) are on the %s page.', 'social-auto-scheduler' ),
-                    '<a href="' . esc_url( admin_url( 'admin.php?page=sas-license' ) ) . '">' . esc_html__( 'License', 'social-auto-scheduler' ) . '</a>'
+                    /* translators: %s: link to the frontend website */
+                    esc_html__( 'Need help? Visit %s for guides and support.', 'social-auto-scheduler' ),
+                    '<a href="' . esc_url( $sas_frontend ) . '" target="_blank" rel="noopener noreferrer">soulitam.com</a>'
                 );
                 ?>
             </p>

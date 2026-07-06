@@ -189,12 +189,7 @@ class SAS_Admin {
 
         check_admin_referer( 'sas_activate_license' );
 
-        $token      = sanitize_text_field( $_POST['sas_license_token'] ?? '' );
-        $backend_url = esc_url_raw( $_POST['sas_backend_url'] ?? '' );
-
-        if ( $backend_url ) {
-            SAS_Backend_Client::set_backend_url( $backend_url );
-        }
+        $token = sanitize_text_field( $_POST['sas_license_token'] ?? '' );
 
         $result = SAS_License_Manager::activate( $token );
 

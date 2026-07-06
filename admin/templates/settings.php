@@ -87,37 +87,25 @@ if (!defined('ABSPATH')) {
             </div>
         </div>
 
-        <!-- API Credentials — managed in backend admin -->
+        <!-- YouTube upload defaults -->
         <div class="sas-card">
             <div class="sas-card__header">
-                <h2><?php esc_html_e('YouTube &amp; Instagram API Credentials', 'social-auto-scheduler'); ?></h2>
+                <h2><?php esc_html_e('YouTube Upload Defaults', 'social-auto-scheduler'); ?></h2>
             </div>
             <div class="sas-card__body">
-                <div style="display:flex;align-items:flex-start;gap:14px;padding:16px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.25);border-radius:8px;">
-                    <span style="font-size:22px;line-height:1;">🔑</span>
-                    <div>
-                        <strong><?php esc_html_e('Credentials are managed in the SocialScheduler backend admin.', 'social-auto-scheduler'); ?></strong>
-                        <p style="margin:6px 0 0;color:#aaa;font-size:13px;">
-                            <?php esc_html_e('Log in to your backend Django Admin → Social Platforms → Platform Config to enter your YouTube Client ID/Secret and Instagram App ID/Secret. The exact redirect URIs you need to register in Google Cloud Console and Meta Developer App are displayed there.', 'social-auto-scheduler'); ?>
-                        </p>
+                <div class="sas-settings-grid">
+                    <div class="sas-field">
+                        <label for="sas-yt-category"><?php esc_html_e('Default Category', 'social-auto-scheduler'); ?></label>
+                        <input type="text" id="sas-yt-category" name="youtube_category" class="sas-input" value="22" />
+                        <p class="sas-field__help"><?php esc_html_e('22 = People & Blogs. See YouTube API docs for full list.', 'social-auto-scheduler'); ?></p>
                     </div>
-                </div>
-
-                <div style="margin-top:20px;">
-                    <div class="sas-settings-grid">
-                        <div class="sas-field">
-                            <label for="sas-yt-category"><?php esc_html_e('YouTube Default Category ID', 'social-auto-scheduler'); ?></label>
-                            <input type="text" id="sas-yt-category" name="youtube_category" class="sas-input" value="22" />
-                            <p class="sas-field__help"><?php esc_html_e('22 = People & Blogs. See YouTube API docs for full list.', 'social-auto-scheduler'); ?></p>
-                        </div>
-                        <div class="sas-field">
-                            <label for="sas-yt-privacy"><?php esc_html_e('YouTube Default Privacy', 'social-auto-scheduler'); ?></label>
-                            <select id="sas-yt-privacy" name="youtube_privacy" class="sas-select">
-                                <option value="public"><?php esc_html_e('Public', 'social-auto-scheduler'); ?></option>
-                                <option value="unlisted"><?php esc_html_e('Unlisted', 'social-auto-scheduler'); ?></option>
-                                <option value="private"><?php esc_html_e('Private', 'social-auto-scheduler'); ?></option>
-                            </select>
-                        </div>
+                    <div class="sas-field">
+                        <label for="sas-yt-privacy"><?php esc_html_e('Default Privacy', 'social-auto-scheduler'); ?></label>
+                        <select id="sas-yt-privacy" name="youtube_privacy" class="sas-select">
+                            <option value="public"><?php esc_html_e('Public', 'social-auto-scheduler'); ?></option>
+                            <option value="unlisted"><?php esc_html_e('Unlisted', 'social-auto-scheduler'); ?></option>
+                            <option value="private"><?php esc_html_e('Private', 'social-auto-scheduler'); ?></option>
+                        </select>
                     </div>
                 </div>
             </div>
