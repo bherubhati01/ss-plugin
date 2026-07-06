@@ -8,7 +8,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  *
  * License flow:
  *   1. Admin enters license token in plugin settings.
- *   2. Plugin calls POST /api/v1/license/verify/ → gets JWT + plan info.
+ *   2. Plugin calls POST /api/v1/licenses/verify/ → gets JWT + plan info.
  *   3. Plugin calls POST /api/v1/websites/register/ → gets website-scoped JWT.
  *   4. All tokens stored in WordPress options (never hardcoded).
  *   5. Plugin verifies every 24 h in the background.
@@ -61,7 +61,7 @@ class SAS_License_Manager {
 		}
 
 		// Step 1: Verify license with backend
-		$verify_result = SAS_Backend_Client::post_public( '/api/v1/license/verify/', [
+		$verify_result = SAS_Backend_Client::post_public( '/api/v1/licenses/verify/', [
 			'token'           => $license_token,
 			'website_url'     => home_url(),
 			'plugin_version'  => SAS_VERSION,
@@ -120,7 +120,7 @@ class SAS_License_Manager {
 			return;
 		}
 
-		$result = SAS_Backend_Client::post_public( '/api/v1/license/verify/', [
+		$result = SAS_Backend_Client::post_public( '/api/v1/licenses/verify/', [
 			'token'       => $token,
 			'website_url' => home_url(),
 		] );

@@ -119,31 +119,62 @@ class SAS_Admin {
     // Page renderers
     // -------------------------------------------------------------------------
 
+    /**
+     * When no active license, every plugin page shows the license gate popup
+     * instead of its content. Returns true when the gate was rendered.
+     */
+    private function render_gate_if_unlicensed(): bool {
+        if ( SAS_License_Manager::is_active() ) {
+            return false;
+        }
+        require SAS_PLUGIN_DIR . 'admin/templates/license-gate.php';
+        return true;
+    }
+
     public function render_dashboard(): void {
+        if ( $this->render_gate_if_unlicensed() ) {
+            return;
+        }
         require_once SAS_PLUGIN_DIR . 'admin/templates/dashboard.php';
     }
 
     public function render_videos(): void {
+        if ( $this->render_gate_if_unlicensed() ) {
+            return;
+        }
         require_once SAS_PLUGIN_DIR . 'admin/templates/videos.php';
     }
 
     public function render_calendar(): void {
+        if ( $this->render_gate_if_unlicensed() ) {
+            return;
+        }
         require_once SAS_PLUGIN_DIR . 'admin/templates/calendar.php';
     }
 
     public function render_accounts(): void {
+        if ( $this->render_gate_if_unlicensed() ) {
+            return;
+        }
         require_once SAS_PLUGIN_DIR . 'admin/templates/accounts.php';
     }
 
     public function render_settings(): void {
+        if ( $this->render_gate_if_unlicensed() ) {
+            return;
+        }
         require_once SAS_PLUGIN_DIR . 'admin/templates/settings.php';
     }
 
     public function render_logs(): void {
+        if ( $this->render_gate_if_unlicensed() ) {
+            return;
+        }
         require_once SAS_PLUGIN_DIR . 'admin/templates/logs.php';
     }
 
     public function render_license(): void {
+        // Always accessible — holds the advanced activation form and deactivation.
         require_once SAS_PLUGIN_DIR . 'admin/templates/license.php';
     }
 
@@ -170,10 +201,17 @@ class SAS_Admin {
         if ( is_wp_error( $result ) ) {
             set_transient( 'sas_license_error', $result->get_error_message(), 30 );
         } else {
-            set_transient( 'sas_license_success', __( 'License activated successfully.', 'social-auto-scheduler' ), 30 );
+            set_transient( 'sas_license_success', __( 'License activated successfully! Welcome aboard.', 'social-auto-scheduler' ), 30 );
         }
 
-        wp_redirect( admin_url( 'admin.php?page=sas-license' ) );
+        // Send the user back to the page they activated from (the gate shows
+        // on every plugin page); fall back to the license page.
+        $referer = wp_get_referer();
+        if ( $referer && strpos( $referer, 'page=sas-' ) !== false ) {
+            wp_redirect( $referer );
+        } else {
+            wp_redirect( admin_url( 'admin.php?page=sas-license' ) );
+        }
         exit;
     }
 

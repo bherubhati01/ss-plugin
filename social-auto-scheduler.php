@@ -3,7 +3,7 @@
  * Plugin Name: Social Auto Scheduler
  * Plugin URI: https://example.com/
  * Description: Automatically schedule and publish videos to YouTube and Instagram
- * Version: 1.1.0
+ * Version: 1.1.1
  * Author: Your Name
  * Author URI: https://example.com
  * License: GPL v2 or later
@@ -18,7 +18,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('SAS_VERSION', '1.1.0');
+define('SAS_VERSION', '1.1.1');
 define('SAS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SAS_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('SAS_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -27,6 +27,11 @@ define('SAS_PLUGIN_BASENAME', plugin_basename(__FILE__));
 //   define('SAS_BACKEND_URL', 'https://api.soulitam.com');
 if (!defined('SAS_BACKEND_URL')) {
     define('SAS_BACKEND_URL', 'https://api.soulitam.com');
+}
+
+// Frontend website (user dashboard) — where users sign up and generate license keys.
+if (!defined('SAS_FRONTEND_URL')) {
+    define('SAS_FRONTEND_URL', 'https://soulitam.com');
 }
 
 require_once SAS_PLUGIN_DIR . 'includes/class-sas-autoloader.php';
