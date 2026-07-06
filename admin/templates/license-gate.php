@@ -103,10 +103,18 @@ $gate_success = get_transient( 'sas_license_success' ); delete_transient( 'sas_l
 </div>
 
 <style>
+    /*
+     * Cover only the content area — keep the WP admin bar (top, 32px) and
+     * admin menu (left, 160px / 36px folded) visible and clickable.
+     * z-index stays below #adminmenuwrap (9990) and #wpadminbar (99999).
+     */
     .sas-gate-overlay {
         position: fixed;
-        inset: 0;
-        z-index: 99999;
+        top: 32px;
+        left: 160px;
+        right: 0;
+        bottom: 0;
+        z-index: 9980;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -116,6 +124,16 @@ $gate_success = get_transient( 'sas_license_success' ); delete_transient( 'sas_l
         backdrop-filter: blur(8px);
         -webkit-backdrop-filter: blur(8px);
         overflow-y: auto;
+    }
+    /* Collapsed admin menu */
+    body.folded .sas-gate-overlay { left: 36px; }
+    /* Auto-folded on medium screens */
+    @media (max-width: 960px) {
+        .sas-gate-overlay { left: 36px; }
+    }
+    /* Mobile: menu is hidden, admin bar grows to 46px */
+    @media (max-width: 782px) {
+        .sas-gate-overlay { left: 0; top: 46px; }
     }
     .sas-gate-modal {
         width: 100%;
