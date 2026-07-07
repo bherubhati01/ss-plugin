@@ -57,8 +57,8 @@ class SAS_Admin {
             return;
         }
 
-        wp_enqueue_style('sas-admin-css', SAS_PLUGIN_URL . 'assets/css/admin.css', [], '1.0.2');
-        wp_enqueue_script('sas-admin-js', SAS_PLUGIN_URL . 'assets/js/admin.js', [], '1.0.2', true);
+        wp_enqueue_style('sas-admin-css', SAS_PLUGIN_URL . 'assets/css/admin.css', [], SAS_VERSION);
+        wp_enqueue_script('sas-admin-js', SAS_PLUGIN_URL . 'assets/js/admin.js', [], SAS_VERSION, true);
 
         wp_localize_script('sas-admin-js', 'sasData', [
             'apiUrl'    => rest_url('sas/v1'),

@@ -1149,6 +1149,43 @@
     }
 
     // =========================================================================
+    // Publish-to toggles — show the connected account per platform and
+    // disable platforms that have no account connected yet.
+    // =========================================================================
+    async function annotatePlatformToggles() {
+        const toggles = document.querySelectorAll('.sas-upload-platform');
+        if (!toggles.length) return;
+        try {
+            const accounts = await api.get('/accounts');
+            toggles.forEach((input) => {
+                const acc   = accounts.find((a) => a.platform === input.value);
+                const label = input.closest('.sas-platform-toggle');
+                const inner = label?.querySelector('.sas-platform-toggle__inner');
+                if (acc) {
+                    input.disabled = false;
+                    if (inner && !inner.querySelector('.sas-platform-toggle__account')) {
+                        const s = document.createElement('span');
+                        s.className = 'sas-platform-toggle__account';
+                        s.style.cssText = 'font-size:11px;opacity:.75;margin-left:6px;';
+                        s.textContent = acc.account_name;
+                        inner.appendChild(s);
+                    }
+                } else {
+                    input.checked  = false;
+                    input.disabled = true;
+                    if (label) {
+                        label.style.opacity = '.5';
+                        label.style.cursor  = 'not-allowed';
+                        label.title = 'Not connected — connect this account from your Soulitam dashboard (Social Accounts).';
+                    }
+                }
+            });
+        } catch (e) {
+            console.error('Platform toggle annotate failed', e);
+        }
+    }
+
+    // =========================================================================
     // Router – dispatch based on current page
     // =========================================================================
     function init() {
@@ -1161,6 +1198,8 @@
         if (page === 'accounts')  initAccounts();
         if (page === 'settings')  initSettings();
         if (page === 'logs')      initLogs();
+
+        annotatePlatformToggles();
     }
 
     if (document.readyState === 'loading') {

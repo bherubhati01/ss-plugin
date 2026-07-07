@@ -445,14 +445,26 @@ class SAS_API {
     // =========================================================================
 
     public function get_accounts(): WP_REST_Response {
+        // Accounts are connected from the frontend dashboard and stored in the
+        // backend — the backend is the source of truth for this website.
+        $result = SAS_Backend_Client::get('/api/v1/social-accounts/plugin/');
+        if (!is_wp_error($result) && is_array($result)) {
+            return new WP_REST_Response(array_values($result), 200);
+        }
+        // Offline fallback: any legacy locally-stored accounts.
         $service  = new SAS_Token_Service();
         $accounts = $service->get_all_accounts();
         return new WP_REST_Response($accounts, 200);
     }
 
     public function delete_account(WP_REST_Request $request): WP_REST_Response {
-        $service = new SAS_Token_Service();
-        $service->delete_account(absint($request->get_param('id')));
+        $id = absint($request->get_param('id'));
+        $result = SAS_Backend_Client::delete('/api/v1/social-accounts/plugin/' . $id . '/');
+        if (is_wp_error($result)) {
+            // Legacy local account fallback
+            $service = new SAS_Token_Service();
+            $service->delete_account($id);
+        }
         return new WP_REST_Response(['success' => true], 200);
     }
 
