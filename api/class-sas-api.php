@@ -252,24 +252,23 @@ class SAS_API {
         try {
             $platforms = SAS_Upload_Service::sanitize_platforms($raw_platforms);
             $service   = new SAS_Upload_Service();
-            $video_ids = $service->handle_single_upload(
-                $files['file'],
-                $platforms,
-                absint($request->get_param('account_id') ?? 0)
-            );
 
             $scheduler = new SAS_Scheduler_Service();
-            $results   = [];
+            $when      = $scheduler->get_next_available_date(null, $platforms[0] ?? 'youtube');
 
-            // Cron queues each video once its publish_date arrives — queuing
-            // here would publish it within minutes instead of as scheduled.
-            foreach ($video_ids as $vid_id) {
-                $date      = $scheduler->schedule_video($vid_id);
-                $results[] = ['id' => $vid_id, 'publish_date' => $date->format('Y-m-d H:i:s')];
-            }
+            // One backend video with a target per selected platform.
+            $video = $service->upload_and_register($files['file'], [
+                'platforms'    => $platforms,
+                'caption'      => pathinfo($files['file']['name'], PATHINFO_FILENAME),
+                'scheduled_at' => $when->format('c'),
+            ]);
 
-            return new WP_REST_Response(['videos' => $results], 201);
-        } catch (RuntimeException $e) {
+            return new WP_REST_Response([
+                'videos' => [
+                    ['id' => $video['id'] ?? 0, 'publish_date' => $when->format('Y-m-d H:i:s')],
+                ],
+            ], 201);
+        } catch (\Throwable $e) {
             return new WP_Error('upload_failed', $e->getMessage(), ['status' => 400]);
         }
     }
@@ -281,12 +280,10 @@ class SAS_API {
             $result  = $service->init_upload([
                 'file_name'  => sanitize_file_name($data['file_name'] ?? 'video.mp4'),
                 'file_size'  => absint($data['file_size'] ?? 0),
-                'chunk_size' => absint($data['chunk_size'] ?? 5242880),
                 'platforms'  => $data['platforms'] ?? $data['platform'] ?? 'youtube',
-                'account_id' => absint($data['account_id'] ?? 0),
             ]);
             return new WP_REST_Response($result, 200);
-        } catch (RuntimeException $e) {
+        } catch (\Throwable $e) {
             return new WP_Error('upload_init_error', $e->getMessage(), ['status' => 400]);
         }
     }
@@ -306,7 +303,7 @@ class SAS_API {
             $service    = new SAS_Upload_Service();
             $result     = $service->receive_chunk($upload_id, $chunk_index, $chunk_data);
             return new WP_REST_Response($result, 200);
-        } catch (RuntimeException $e) {
+        } catch (\Throwable $e) {
             return new WP_Error('chunk_failed', $e->getMessage(), ['status' => 500]);
         }
     }
@@ -315,21 +312,12 @@ class SAS_API {
         $upload_id = sanitize_text_field($request->get_param('upload_id') ?? '');
 
         try {
-            $service   = new SAS_Upload_Service();
-            $video_ids = $service->finalize_upload($upload_id);
-
-            $scheduler = new SAS_Scheduler_Service();
-            $results   = [];
-
-            // Cron queues each video once its publish_date arrives — queuing
-            // here would publish it within minutes instead of as scheduled.
-            foreach ($video_ids as $vid_id) {
-                $date      = $scheduler->schedule_video($vid_id);
-                $results[] = ['id' => $vid_id, 'publish_date' => $date->format('Y-m-d H:i:s')];
-            }
-
-            return new WP_REST_Response(['videos' => $results], 201);
-        } catch (RuntimeException $e) {
+            $service = new SAS_Upload_Service();
+            // Assembles the file into the Media Library, schedules it for the
+            // next available slot, and registers it with the backend.
+            $result = $service->finalize_upload($upload_id);
+            return new WP_REST_Response($result, 201);
+        } catch (\Throwable $e) {
             return new WP_Error('finalize_failed', $e->getMessage(), ['status' => 500]);
         }
     }
