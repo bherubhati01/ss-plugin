@@ -70,12 +70,21 @@ class SAS_Backend_Client {
 
 	/**
 	 * Make an authenticated GET request to the backend.
+	 * Automatically refreshes the JWT and retries once on 401.
 	 *
 	 * @param string $path   API path (e.g. '/api/v1/videos/').
 	 * @param array  $params Query params.
 	 * @return array|WP_Error Decoded JSON body or WP_Error.
 	 */
 	public static function get( string $path, array $params = [] ) {
+		$result = self::do_get( $path, $params );
+		if ( self::is_unauthorized( $result ) && self::refresh_access_token() ) {
+			$result = self::do_get( $path, $params );
+		}
+		return $result;
+	}
+
+	private static function do_get( string $path, array $params = [] ) {
 		$url = self::get_backend_url() . $path;
 		if ( $params ) {
 			$url = add_query_arg( $params, $url );
@@ -91,12 +100,21 @@ class SAS_Backend_Client {
 
 	/**
 	 * Make an authenticated POST request to the backend.
+	 * Automatically refreshes the JWT and retries once on 401.
 	 *
 	 * @param string $path API path.
 	 * @param array  $body Request body (will be JSON-encoded).
 	 * @return array|WP_Error Decoded JSON body or WP_Error.
 	 */
 	public static function post( string $path, array $body = [] ) {
+		$result = self::do_post( $path, $body );
+		if ( self::is_unauthorized( $result ) && self::refresh_access_token() ) {
+			$result = self::do_post( $path, $body );
+		}
+		return $result;
+	}
+
+	private static function do_post( string $path, array $body = [] ) {
 		$url      = self::get_backend_url() . $path;
 		$response = wp_remote_post( $url, [
 			'timeout' => 30,
@@ -123,8 +141,17 @@ class SAS_Backend_Client {
 
 	/**
 	 * DELETE request.
+	 * Automatically refreshes the JWT and retries once on 401.
 	 */
 	public static function delete( string $path ) {
+		$result = self::do_delete( $path );
+		if ( self::is_unauthorized( $result ) && self::refresh_access_token() ) {
+			$result = self::do_delete( $path );
+		}
+		return $result;
+	}
+
+	private static function do_delete( string $path ) {
 		$url      = self::get_backend_url() . $path;
 		$response = wp_remote_request( $url, [
 			'method'  => 'DELETE',
@@ -133,6 +160,48 @@ class SAS_Backend_Client {
 		] );
 
 		return self::parse_response( $response, 'DELETE', $path );
+	}
+
+	// ── JWT auto-refresh ──────────────────────────────────────────────────────
+
+	private static function is_unauthorized( $result ): bool {
+		if ( ! is_wp_error( $result ) ) {
+			return false;
+		}
+		$data = $result->get_error_data();
+		return is_array( $data ) && (int) ( $data['status'] ?? 0 ) === 401;
+	}
+
+	/**
+	 * Exchange the stored refresh token for a fresh access token.
+	 * The backend rotates refresh tokens, so both are re-stored.
+	 */
+	private static function refresh_access_token(): bool {
+		$refresh = self::get_refresh_token();
+		if ( ! $refresh ) {
+			return false;
+		}
+
+		$response = wp_remote_post( self::get_backend_url() . '/api/v1/auth/token/refresh/', [
+			'timeout' => 30,
+			'headers' => [ 'Content-Type' => 'application/json' ],
+			'body'    => wp_json_encode( [ 'refresh' => $refresh ] ),
+		] );
+
+		if ( is_wp_error( $response ) || (int) wp_remote_retrieve_response_code( $response ) >= 400 ) {
+			return false;
+		}
+
+		$body = json_decode( wp_remote_retrieve_body( $response ), true );
+		if ( empty( $body['access'] ) ) {
+			return false;
+		}
+
+		update_option( self::OPTION_JWT_ACCESS, $body['access'] );
+		if ( ! empty( $body['refresh'] ) ) {
+			update_option( self::OPTION_JWT_REFRESH, $body['refresh'] );
+		}
+		return true;
 	}
 
 	// ── Helpers ───────────────────────────────────────────────────────────────
