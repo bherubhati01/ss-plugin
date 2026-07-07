@@ -112,15 +112,25 @@ class SAS_Upload_Service {
 			throw new RuntimeException( __( 'Plugin is not connected to the backend. Please activate your license.', 'social-auto-scheduler' ) );
 		}
 
+		// One backend video with a target per selected platform — the backend
+		// resolves each platform to this website's connected account.
+		$platforms = $meta['platforms'] ?? [];
+		if ( ! is_array( $platforms ) ) {
+			$platforms = [ $platforms ];
+		}
+		if ( empty( $platforms ) && ! empty( $meta['platform'] ) ) {
+			$platforms = [ $meta['platform'] ];
+		}
+		$platforms = array_values( array_filter( array_map( 'sanitize_key', $platforms ) ) );
+
 		$body = [
-			'file_url'          => $file_url,
-			'thumbnail_url'     => $thumbnail_url,
-			'caption'           => sanitize_text_field( $meta['caption'] ?? '' ),
-			'description'       => sanitize_textarea_field( $meta['description'] ?? '' ),
-			'tags'              => SAS_Helpers::sanitize_tags( $meta['tags'] ?? [] ),
-			'platform'          => sanitize_key( $meta['platform'] ?? 'instagram' ),
-			'social_account_id' => ! empty( $meta['social_account_id'] ) ? (int) $meta['social_account_id'] : null,
-			'scheduled_at'      => $meta['scheduled_at'] ?? null,
+			'file_url'      => $file_url,
+			'thumbnail_url' => $thumbnail_url,
+			'caption'       => sanitize_text_field( $meta['caption'] ?? '' ),
+			'description'   => sanitize_textarea_field( $meta['description'] ?? '' ),
+			'tags'          => SAS_Helpers::sanitize_tags( $meta['tags'] ?? [] ),
+			'platforms'     => $platforms ?: [ 'instagram' ],
+			'scheduled_at'  => $meta['scheduled_at'] ?? null,
 		];
 
 		$result = SAS_Backend_Client::post( '/api/v1/videos/', $body );
