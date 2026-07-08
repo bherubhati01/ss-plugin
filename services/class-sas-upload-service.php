@@ -98,6 +98,27 @@ class SAS_Upload_Service {
 	}
 
 	/**
+	 * Progress of a chunked upload session.
+	 */
+	public function get_status( string $upload_id ): array {
+		$session = get_transient( 'sas_upload_' . $upload_id );
+		if ( false === $session ) {
+			return [ 'exists' => false ];
+		}
+		$part  = self::part_path( $upload_id );
+		$bytes = file_exists( $part ) ? (int) filesize( $part ) : 0;
+		return [
+			'exists'         => true,
+			'file_name'      => $session['file_name'],
+			'file_size'      => (int) $session['file_size'],
+			'bytes_received' => $bytes,
+			'percent'        => $session['file_size'] > 0
+				? (int) floor( $bytes / (int) $session['file_size'] * 100 )
+				: 0,
+		];
+	}
+
+	/**
 	 * Assemble the uploaded file into the Media Library, then register it
 	 * with the backend (scheduled to the next available slot).
 	 */
@@ -273,7 +294,7 @@ class SAS_Upload_Service {
 			'scheduled_at'  => $meta['scheduled_at'] ?? null,
 		];
 
-		$result = SAS_Backend_Client::post( '/api/v1/videos/', $body );
+		$result = SAS_Backend_Client::post( '/api/v1/videos/plugin/', $body );
 
 		if ( is_wp_error( $result ) ) {
 			throw new RuntimeException( $result->get_error_message() );

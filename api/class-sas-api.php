@@ -38,10 +38,10 @@ class SAS_API {
         register_rest_route($ns, '/upload/chunk', [
             ['methods' => 'POST', 'callback' => [$this, 'upload_chunk'], 'permission_callback' => [$this, 'auth']],
         ]);
-        register_rest_route($ns, '/upload/finalize/(?P<upload_id>[a-zA-Z0-9_.]+)', [
+        register_rest_route($ns, '/upload/finalize/(?P<upload_id>[a-zA-Z0-9_.\-]+)', [
             ['methods' => 'POST', 'callback' => [$this, 'upload_finalize'], 'permission_callback' => [$this, 'auth']],
         ]);
-        register_rest_route($ns, '/upload/status/(?P<upload_id>[a-zA-Z0-9_.]+)', [
+        register_rest_route($ns, '/upload/status/(?P<upload_id>[a-zA-Z0-9_.\-]+)', [
             ['methods' => 'GET', 'callback' => [$this, 'upload_status'], 'permission_callback' => [$this, 'auth']],
         ]);
 

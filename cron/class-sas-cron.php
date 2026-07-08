@@ -45,7 +45,7 @@ class SAS_Cron {
 			return;
 		}
 
-		$result = SAS_Backend_Client::get( '/api/v1/videos/', [
+		$result = SAS_Backend_Client::get( '/api/v1/videos/plugin/', [
 			'status'    => 'published',
 			'page_size' => 50,
 		] );
