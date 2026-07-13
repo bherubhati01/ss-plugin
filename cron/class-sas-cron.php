@@ -11,6 +11,10 @@ if ( ! defined( 'ABSPATH' ) ) {
  *   1. Verifies the license periodically.
  *   2. Syncs video statuses (published/failed) from the backend to local cache.
  *   3. Syncs plugin metadata to the backend (heartbeat).
+ *   4. Deletes Media Library files for videos 72h past publish (WordPress
+ *      storage's equivalent of the backend's Google Drive cleanup — Drive is
+ *      frontend-only, this plugin always uploads to and cleans up its own
+ *      Media Library).
  */
 class SAS_Cron {
 
@@ -31,6 +35,7 @@ class SAS_Cron {
 			SAS_License_Manager::verify_periodically();
 			$this->sync_from_backend();
 			$this->heartbeat();
+			$this->cleanup_wp_media();
 		} catch ( Throwable $e ) {
 			$this->log_service->error( 'cron_error', $e->getMessage() );
 		} finally {
@@ -72,5 +77,60 @@ class SAS_Cron {
 			'plugin_version'    => SAS_VERSION,
 			'wordpress_version' => get_bloginfo( 'version' ),
 		] );
+	}
+
+	// ── Delete Media Library files 72h after they publish ────────────────────
+
+	/**
+	 * The backend tracks which of this website's published videos are past
+	 * their 72h retention window (source=plugin, wp_attachment_id set,
+	 * media_deleted_at still null) but can't delete the file itself — it has
+	 * no filesystem/DB access to this WordPress install. So: ask what's due,
+	 * delete each attachment locally, then confirm back so the backend marks
+	 * media_deleted_at and never offers those videos again. Videos scheduled
+	 * from a pasted URL never get a wp_attachment_id, so they're never
+	 * touched here.
+	 */
+	private function cleanup_wp_media(): void {
+		if ( ! SAS_License_Manager::is_active() ) {
+			return;
+		}
+
+		$result = SAS_Backend_Client::get( '/api/v1/videos/plugin/media-cleanup/' );
+		if ( is_wp_error( $result ) ) {
+			$this->log_service->warning( 'media_cleanup_check_failed', $result->get_error_message() );
+			return;
+		}
+
+		$due = $result['videos'] ?? [];
+		if ( ! $due ) {
+			return;
+		}
+
+		$deleted_ids = [];
+		foreach ( $due as $video ) {
+			$attachment_id = (int) ( $video['wp_attachment_id'] ?? 0 );
+			$video_id      = (int) ( $video['id'] ?? 0 );
+			if ( ! $attachment_id || ! $video_id ) {
+				continue;
+			}
+			// true = force-delete, skip Trash (bypasses MEDIA_TRASH so the
+			// file is actually removed, not just hidden).
+			if ( wp_delete_attachment( $attachment_id, true ) ) {
+				$deleted_ids[] = $video_id;
+			} else {
+				// Already gone (e.g. deleted manually from the Media Library) —
+				// still confirm it so the backend stops offering it.
+				$deleted_ids[] = $video_id;
+			}
+		}
+
+		if ( $deleted_ids ) {
+			SAS_Backend_Client::post( '/api/v1/videos/plugin/media-cleanup/', [ 'ids' => $deleted_ids ] );
+			$this->log_service->info(
+				'media_cleanup',
+				sprintf( '%d video file(s) deleted from the Media Library (72h post-publish).', count( $deleted_ids ) )
+			);
+		}
 	}
 }

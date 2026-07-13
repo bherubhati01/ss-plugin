@@ -101,8 +101,22 @@ class SAS_License_Manager {
 	 * Deactivate the license and clear all stored tokens.
 	 */
 	public static function deactivate(): void {
-		update_option( self::OPTION_LICENSE_STATUS, 'inactive' );
+		self::clear_all();
 		SAS_Backend_Client::clear_tokens();
+	}
+
+	/**
+	 * Delete every stored license option (token, status, plan, permissions,
+	 * last-verified timestamp). Used on deactivation and on full uninstall —
+	 * a deactivated/uninstalled plugin should never leave a live license
+	 * token sitting in wp_options.
+	 */
+	public static function clear_all(): void {
+		delete_option( self::OPTION_LICENSE_TOKEN );
+		delete_option( self::OPTION_LICENSE_STATUS );
+		delete_option( self::OPTION_LICENSE_PLAN );
+		delete_option( self::OPTION_PERMISSIONS );
+		delete_option( self::OPTION_LAST_VERIFIED );
 	}
 
 	/**

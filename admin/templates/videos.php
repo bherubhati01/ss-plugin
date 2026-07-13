@@ -15,10 +15,30 @@ if (!defined('ABSPATH')) {
     <!-- Upload area (hidden by default) -->
     <div class="sas-card" id="sas-upload-panel" style="display:none;">
         <div class="sas-card__body">
+            <!-- Post type selector -->
+            <div class="sas-platform-selector" id="sas-content-type-selector-videos">
+                <span class="sas-platform-selector__label"><?php esc_html_e('Post type:', 'social-auto-scheduler'); ?></span>
+                <label class="sas-platform-toggle">
+                    <input type="radio" class="sas-upload-content-type" name="content_type" value="reel" checked />
+                    <span class="sas-platform-toggle__inner sas-platform-toggle__inner--reel">
+                        <?php esc_html_e('Reel / Video', 'social-auto-scheduler'); ?>
+                    </span>
+                </label>
+                <label class="sas-platform-toggle">
+                    <input type="radio" class="sas-upload-content-type" name="content_type" value="story" />
+                    <span class="sas-platform-toggle__inner sas-platform-toggle__inner--story">
+                        <?php esc_html_e('Story', 'social-auto-scheduler'); ?>
+                    </span>
+                </label>
+                <span class="sas-field__help" id="sas-content-type-help-videos" style="display:none;flex-basis:100%;">
+                    <?php esc_html_e('Stories are Instagram-only and publish without a caption.', 'social-auto-scheduler'); ?>
+                </span>
+            </div>
+
             <!-- Platform selector -->
             <div class="sas-platform-selector" id="sas-platform-selector-videos">
                 <span class="sas-platform-selector__label"><?php esc_html_e('Publish to:', 'social-auto-scheduler'); ?></span>
-                <label class="sas-platform-toggle">
+                <label class="sas-platform-toggle" id="sas-platform-toggle-youtube-videos">
                     <input type="checkbox" class="sas-upload-platform" name="platforms[]" value="youtube" checked />
                     <span class="sas-platform-toggle__inner sas-platform-toggle__inner--youtube">
                         <svg viewBox="0 0 24 24" width="16" height="16" style="vertical-align:middle"><path fill="currentColor" d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
@@ -35,7 +55,7 @@ if (!defined('ABSPATH')) {
             </div>
 
             <div id="sas-upload-area-videos" class="sas-upload-area">
-                <div class="sas-upload-area__icon">&#128247;</div>
+                <div class="sas-upload-area__icon"><span class="dashicons dashicons-cloud-upload"></span></div>
                 <p class="sas-upload-area__title"><?php esc_html_e('Drop videos here or click to browse', 'social-auto-scheduler'); ?></p>
                 <p class="sas-upload-area__hint"><?php esc_html_e('MP4, MOV — max 5 GB each', 'social-auto-scheduler'); ?></p>
                 <input type="file" id="sas-file-input-videos" accept="video/mp4,video/quicktime,.mp4,.mov" multiple hidden />

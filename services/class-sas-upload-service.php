@@ -46,6 +46,16 @@ class SAS_Upload_Service {
 		return $out ?: [ 'youtube' ];
 	}
 
+	/**
+	 * Sanitize a content_type input down to 'reel' (default) or 'story'.
+	 * Stories are Instagram-only — see SAS_Upload_Service::send_to_backend()
+	 * and the backend's VideoService, which both enforce this independently.
+	 */
+	public static function sanitize_content_type( $raw ): string {
+		$val = sanitize_key( (string) $raw );
+		return 'story' === $val ? 'story' : 'reel';
+	}
+
 	// ── Chunked upload (large files) ──────────────────────────────────────────
 
 	private static function tmp_dir(): string {
@@ -74,9 +84,10 @@ class SAS_Upload_Service {
 
 		$upload_id = wp_generate_uuid4();
 		set_transient( 'sas_upload_' . $upload_id, [
-			'file_name' => $file_name,
-			'file_size' => $file_size,
-			'platforms' => self::sanitize_platforms( $args['platforms'] ?? [] ),
+			'file_name'    => $file_name,
+			'file_size'    => $file_size,
+			'platforms'    => self::sanitize_platforms( $args['platforms'] ?? [] ),
+			'content_type' => self::sanitize_content_type( $args['content_type'] ?? 'reel' ),
 		], DAY_IN_SECONDS );
 
 		// Start with an empty part file.
@@ -160,20 +171,26 @@ class SAS_Upload_Service {
 		require_once ABSPATH . 'wp-admin/includes/media.php';
 		wp_update_attachment_metadata( (int) $attachment_id, wp_generate_attachment_metadata( (int) $attachment_id, $dest ) );
 
-		return $this->schedule_and_register( (int) $attachment_id, $session['platforms'] );
+		return $this->schedule_and_register(
+			(int) $attachment_id,
+			$session['platforms'],
+			$session['content_type'] ?? 'reel'
+		);
 	}
 
 	/**
 	 * Compute the next publish slot, register the attachment with the backend
 	 * (one video, one target per platform), and return the API response shape.
 	 */
-	public function schedule_and_register( int $attachment_id, array $platforms ): array {
+	public function schedule_and_register( int $attachment_id, array $platforms, string $content_type = 'reel' ): array {
 		$scheduler = new SAS_Scheduler_Service();
 		$when      = $scheduler->get_next_available_date( null, $platforms[0] ?? 'youtube' );
 
 		$video = $this->register_attachment( $attachment_id, [
 			'platforms'    => $platforms,
-			'caption'      => get_the_title( $attachment_id ),
+			'content_type' => $content_type,
+			// Stories don't support captions — see send_to_backend().
+			'caption'      => 'story' === $content_type ? '' : get_the_title( $attachment_id ),
 			'scheduled_at' => $when->format( 'c' ),
 		] );
 
@@ -211,6 +228,7 @@ class SAS_Upload_Service {
 			throw new RuntimeException( __( 'Could not retrieve URL for uploaded video.', 'social-auto-scheduler' ) );
 		}
 
+		$meta['wp_attachment_id'] = $attachment_id;
 		return $this->send_to_backend( $file_url, $thumbnail_url, $meta );
 	}
 
@@ -232,6 +250,7 @@ class SAS_Upload_Service {
 			throw new RuntimeException( __( 'Invalid attachment ID.', 'social-auto-scheduler' ) );
 		}
 
+		$meta['wp_attachment_id'] = $attachment_id;
 		return $this->send_to_backend( $file_url, $thumbnail_url, $meta );
 	}
 
@@ -282,16 +301,28 @@ class SAS_Upload_Service {
 		if ( empty( $platforms ) && ! empty( $meta['platform'] ) ) {
 			$platforms = [ $meta['platform'] ];
 		}
-		$platforms = array_values( array_filter( array_map( 'sanitize_key', $platforms ) ) );
+		$platforms    = array_values( array_filter( array_map( 'sanitize_key', $platforms ) ) );
+		$content_type = self::sanitize_content_type( $meta['content_type'] ?? 'reel' );
+
+		// Stories are Instagram-only — the backend enforces this too, but
+		// filtering here avoids silently dropping the whole request if a
+		// non-Instagram platform slipped through the UI.
+		if ( 'story' === $content_type ) {
+			$platforms = array_values( array_intersect( $platforms, [ 'instagram' ] ) );
+		}
 
 		$body = [
-			'file_url'      => $file_url,
-			'thumbnail_url' => $thumbnail_url,
-			'caption'       => sanitize_text_field( $meta['caption'] ?? '' ),
-			'description'   => sanitize_textarea_field( $meta['description'] ?? '' ),
-			'tags'          => SAS_Helpers::sanitize_tags( $meta['tags'] ?? [] ),
-			'platforms'     => $platforms ?: [ 'instagram' ],
-			'scheduled_at'  => $meta['scheduled_at'] ?? null,
+			'file_url'         => $file_url,
+			'thumbnail_url'    => $thumbnail_url,
+			'caption'          => 'story' === $content_type ? '' : sanitize_text_field( $meta['caption'] ?? '' ),
+			'description'      => 'story' === $content_type ? '' : sanitize_textarea_field( $meta['description'] ?? '' ),
+			'tags'             => 'story' === $content_type ? [] : SAS_Helpers::sanitize_tags( $meta['tags'] ?? [] ),
+			'content_type'     => $content_type,
+			'platforms'        => $platforms ?: [ 'story' === $content_type ? 'instagram' : 'youtube' ],
+			'scheduled_at'     => $meta['scheduled_at'] ?? null,
+			// So the backend knows to offer this video for the 72h-after-publish
+			// Media Library cleanup sweep — see cron/class-sas-cron.php.
+			'wp_attachment_id' => isset( $meta['wp_attachment_id'] ) ? (int) $meta['wp_attachment_id'] : null,
 		];
 
 		$result = SAS_Backend_Client::post( '/api/v1/videos/plugin/', $body );

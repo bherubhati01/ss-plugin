@@ -90,6 +90,11 @@ class SAS_API {
         register_rest_route($ns, '/scheduler/next-date', [
             ['methods' => 'GET', 'callback' => [$this, 'get_next_date'], 'permission_callback' => [$this, 'auth']],
         ]);
+
+        // --- Contact / Support ---
+        register_rest_route($ns, '/contact', [
+            ['methods' => 'POST', 'callback' => [$this, 'submit_contact'], 'permission_callback' => [$this, 'auth']],
+        ]);
     }
 
     // =========================================================================
@@ -103,130 +108,202 @@ class SAS_API {
     // =========================================================================
     // Videos
     // =========================================================================
+    //
+    // Videos live entirely on the backend now (the plugin never stores a
+    // local copy — see SAS_Upload_Service). Every handler below proxies the
+    // backend's plugin-scoped video endpoints and adapts field names to the
+    // shape assets/js/admin.js expects (title/publish_date/thumbnail_url/...).
 
-    public function get_videos(WP_REST_Request $request): WP_REST_Response {
-        $service = new SAS_Video_Service();
-        $args    = [
-            'status'   => sanitize_text_field($request->get_param('status') ?? ''),
-            'platform' => sanitize_text_field($request->get_param('platform') ?? ''),
-            'search'   => sanitize_text_field($request->get_param('search') ?? ''),
-            'orderby'  => sanitize_key($request->get_param('orderby') ?? 'created_at'),
-            'order'    => strtoupper(sanitize_text_field($request->get_param('order') ?? 'DESC')),
-            'limit'    => absint($request->get_param('limit') ?? 20),
-            'offset'   => absint($request->get_param('offset') ?? 0),
+    /**
+     * Convert a backend VideoSerializer object into the local admin.js shape.
+     */
+    private static function map_backend_video(array $v): array {
+        $publish_date = '';
+        if (!empty($v['scheduled_at'])) {
+            try {
+                $dt = new DateTime($v['scheduled_at']);
+                $dt->setTimezone(wp_timezone());
+                $publish_date = $dt->format('Y-m-d H:i:s');
+            } catch (Exception $e) {
+                $publish_date = '';
+            }
+        }
+        $platforms    = $v['platforms'] ?? ($v['platform'] ? [$v['platform']] : []);
+        $content_type = $v['content_type'] ?? 'reel';
+
+        return [
+            'id'            => $v['id'],
+            'title'         => $v['caption'] ?: (
+                'story' === $content_type
+                    ? __('Instagram Story', 'social-auto-scheduler')
+                    : __('Untitled video', 'social-auto-scheduler')
+            ),
+            'description'   => $v['description'] ?? '',
+            'tags'          => wp_json_encode($v['tags'] ?? []),
+            'platform'      => $platforms[0] ?? 'youtube',
+            'platforms'     => $platforms,
+            'content_type'  => $content_type,
+            'status'        => $v['status'] ?? 'draft',
+            'publish_date'  => $publish_date,
+            'thumbnail_url' => $v['thumbnail_url'] ?? '',
+            'duration'      => 0,   // not tracked backend-side (no local file)
+            'file_size'     => 0,   // not tracked backend-side (no local file)
+            'error_message' => $v['error_message'] ?? '',
         ];
-        return new WP_REST_Response($service->get_all(null, $args), 200);
+    }
+
+    public function get_videos(WP_REST_Request $request): WP_REST_Response|WP_Error {
+        $limit  = max(1, min(200, absint($request->get_param('limit') ?? 20)));
+        $offset = max(0, absint($request->get_param('offset') ?? 0));
+
+        $params = [
+            'status'    => sanitize_text_field($request->get_param('status') ?? ''),
+            'platform'  => sanitize_text_field($request->get_param('platform') ?? ''),
+            'search'    => sanitize_text_field($request->get_param('search') ?? ''),
+            'page'      => (int) floor($offset / $limit) + 1,
+            'page_size' => $limit,
+        ];
+        $params = array_filter($params, fn($v) => $v !== '' && $v !== null);
+
+        $result = SAS_Backend_Client::get('/api/v1/videos/plugin/', $params);
+        if (is_wp_error($result)) {
+            return $result;
+        }
+
+        $items = array_map([self::class, 'map_backend_video'], $result['results'] ?? []);
+        return new WP_REST_Response($items, 200);
     }
 
     public function get_video(WP_REST_Request $request): WP_REST_Response|WP_Error {
-        $service = new SAS_Video_Service();
-        $video   = $service->get(absint($request->get_param('id')), get_current_user_id());
-        if (!$video) {
+        $id     = absint($request->get_param('id'));
+        $result = SAS_Backend_Client::get("/api/v1/videos/plugin/{$id}/");
+        if (is_wp_error($result)) {
             return new WP_Error('not_found', __('Video not found.', 'social-auto-scheduler'), ['status' => 404]);
         }
-        return new WP_REST_Response($video, 200);
+        return new WP_REST_Response(self::map_backend_video($result), 200);
     }
 
     public function create_video(WP_REST_Request $request): WP_REST_Response {
-        $service = new SAS_Video_Service();
-        $data    = $request->get_json_params();
-
-        $video_id = $service->create([
-            'file_path'   => sanitize_text_field($data['file_path'] ?? ''),
-            'file_url'    => esc_url_raw($data['file_url'] ?? ''),
-            'thumbnail_url'=> esc_url_raw($data['thumbnail_url'] ?? ''),
-            'title'       => sanitize_text_field($data['title'] ?? ''),
-            'description' => sanitize_textarea_field($data['description'] ?? ''),
-            'tags'        => SAS_Helpers::sanitize_tags($data['tags'] ?? []),
-            'duration'    => absint($data['duration'] ?? 0),
-            'file_size'   => absint($data['file_size'] ?? 0),
-            'platform'    => sanitize_key($data['platform'] ?? 'youtube'),
-            'account_id'  => absint($data['account_id'] ?? 0),
-        ]);
-
-        return new WP_REST_Response(['id' => $video_id], 201);
+        // Dead route — videos are created exclusively through the /upload*
+        // endpoints (SAS_Upload_Service), never via a raw POST /videos.
+        return new WP_REST_Response(
+            ['success' => false, 'message' => __('Use the upload endpoints to add a video.', 'social-auto-scheduler')],
+            400
+        );
     }
 
     public function update_video(WP_REST_Request $request): WP_REST_Response|WP_Error {
-        $service  = new SAS_Video_Service();
-        $video_id = absint($request->get_param('id'));
-        $data     = $request->get_json_params() ?? [];
+        $id   = absint($request->get_param('id'));
+        $data = $request->get_json_params() ?? [];
 
-        $sanitized = [];
-        if (isset($data['title']))       $sanitized['title']       = sanitize_text_field($data['title']);
-        if (isset($data['description'])) $sanitized['description'] = sanitize_textarea_field($data['description']);
-        if (isset($data['tags']))        $sanitized['tags']        = json_encode(SAS_Helpers::sanitize_tags($data['tags']));
-        if (isset($data['status']))      $sanitized['status']      = sanitize_key($data['status']);
-        if (isset($data['publish_date'])) $sanitized['publish_date'] = sanitize_text_field($data['publish_date']);
-        if (isset($data['account_id'])) $sanitized['account_id']  = absint($data['account_id']);
-        if (isset($data['platform']))   $sanitized['platform']    = sanitize_key($data['platform']);
+        $body = [];
+        if (isset($data['title']))       $body['caption']     = sanitize_text_field($data['title']);
+        if (isset($data['description'])) $body['description'] = sanitize_textarea_field($data['description']);
+        if (isset($data['tags']))        $body['tags']         = SAS_Helpers::sanitize_tags($data['tags']);
+        if (!empty($data['publish_date'])) {
+            // publish_date arrives as WP-local 'Y-m-d H:i:s' — convert to ISO 8601.
+            try {
+                $dt = new DateTime(sanitize_text_field($data['publish_date']), wp_timezone());
+                $body['scheduled_at'] = $dt->format('c');
+            } catch (Exception $e) {
+                return new WP_Error('invalid_date', __('Invalid publish date.', 'social-auto-scheduler'), ['status' => 400]);
+            }
+        }
+        // Note: platform is intentionally not editable post-creation (the
+        // edit form's platform field is disabled) — targets are fixed at
+        // upload time.
 
-        $service->update($video_id, $sanitized, get_current_user_id());
+        $result = SAS_Backend_Client::patch("/api/v1/videos/plugin/{$id}/", $body);
+        if (is_wp_error($result)) {
+            return $result;
+        }
         return new WP_REST_Response(['success' => true], 200);
     }
 
-    public function delete_video(WP_REST_Request $request): WP_REST_Response {
-        $service = new SAS_Video_Service();
-        $service->delete(absint($request->get_param('id')), get_current_user_id());
+    public function delete_video(WP_REST_Request $request): WP_REST_Response|WP_Error {
+        $id     = absint($request->get_param('id'));
+        $result = SAS_Backend_Client::delete("/api/v1/videos/plugin/{$id}/");
+        if (is_wp_error($result)) {
+            return $result;
+        }
         return new WP_REST_Response(['success' => true], 200);
     }
 
+    /**
+     * Schedule a single draft/failed video into the next available slot.
+     * Uses the bulk/schedule endpoint with one ID — it's the only backend
+     * route that both sets scheduled_at AND flips status to 'scheduled'
+     * (a plain PATCH of scheduled_at would leave status untouched and the
+     * Celery beat would never pick the video up).
+     */
     public function schedule_video(WP_REST_Request $request): WP_REST_Response|WP_Error {
-        $video_id = absint($request->get_param('id'));
+        $id = absint($request->get_param('id'));
         try {
             $scheduler = new SAS_Scheduler_Service();
-            // Sets status to 'scheduled' with a future publish_date. The cron's
-            // move_due_videos_to_queue() adds it to the queue once that date
-            // actually arrives — do NOT queue it here, or it publishes immediately.
-            $date      = $scheduler->schedule_video($video_id, get_current_user_id());
-
-            return new WP_REST_Response(['success' => true, 'publish_date' => $date->format('Y-m-d H:i:s')], 200);
+            $date      = $scheduler->get_next_available_date();
         } catch (Exception $e) {
             return new WP_Error('schedule_error', $e->getMessage(), ['status' => 500]);
         }
+
+        $result = SAS_Backend_Client::post('/api/v1/videos/plugin/bulk/schedule/', [
+            'ids'          => [$id],
+            'scheduled_at' => $date->format('c'),
+        ]);
+        if (is_wp_error($result)) {
+            return $result;
+        }
+
+        return new WP_REST_Response(['success' => true, 'publish_date' => $date->format('Y-m-d H:i:s')], 200);
     }
 
     public function bulk_action(WP_REST_Request $request): WP_REST_Response|WP_Error {
-        $data    = $request->get_json_params() ?? [];
-        $action  = sanitize_key($data['action'] ?? '');
-        $ids     = array_map('absint', $data['ids'] ?? []);
-        $user_id = get_current_user_id();
+        $data = $request->get_json_params() ?? [];
+        $action = sanitize_key($data['action'] ?? '');
+        $ids    = array_values(array_filter(array_map('absint', $data['ids'] ?? [])));
 
         if (empty($ids)) {
             return new WP_Error('no_ids', __('No video IDs provided.', 'social-auto-scheduler'), ['status' => 400]);
         }
 
-        $service = new SAS_Video_Service();
-
         switch ($action) {
             case 'delete':
-                $count = $service->bulk_delete($ids, $user_id);
-                return new WP_REST_Response(['success' => true, 'affected' => $count], 200);
+                $result = SAS_Backend_Client::post('/api/v1/videos/plugin/bulk/delete/', ['ids' => $ids]);
+                if (is_wp_error($result)) {
+                    return $result;
+                }
+                return new WP_REST_Response(['success' => true, 'affected' => $result['deleted'] ?? count($ids)], 200);
 
             case 'reschedule':
-                $count = $service->bulk_reschedule($ids, $user_id);
-                return new WP_REST_Response(['success' => true, 'affected' => $count], 200);
-
             case 'schedule':
+                // Give each video its own staggered slot rather than piling
+                // them all onto one timestamp.
                 $scheduler = new SAS_Scheduler_Service();
                 $count     = 0;
                 foreach ($ids as $id) {
                     try {
-                        // Cron queues each video once its publish_date arrives —
-                        // queuing here would publish all of them immediately.
-                        $scheduler->schedule_video($id, $user_id);
-                        $count++;
+                        $date = $scheduler->get_next_available_date();
                     } catch (Exception $e) {
-                        // continue
+                        break; // no more slots available — stop, keep what succeeded
+                    }
+                    $result = SAS_Backend_Client::post('/api/v1/videos/plugin/bulk/schedule/', [
+                        'ids'          => [$id],
+                        'scheduled_at' => $date->format('c'),
+                    ]);
+                    if (!is_wp_error($result)) {
+                        $count++;
                     }
                 }
                 return new WP_REST_Response(['success' => true, 'affected' => $count], 200);
 
             case 'cancel':
+                $count = 0;
                 foreach ($ids as $id) {
-                    $service->update($id, ['status' => 'cancelled'], $user_id);
+                    $result = SAS_Backend_Client::delete("/api/v1/videos/plugin/{$id}/");
+                    if (!is_wp_error($result)) {
+                        $count++;
+                    }
                 }
-                return new WP_REST_Response(['success' => true, 'affected' => count($ids)], 200);
+                return new WP_REST_Response(['success' => true, 'affected' => $count], 200);
 
             default:
                 return new WP_Error('unknown_action', __('Unknown bulk action.', 'social-auto-scheduler'), ['status' => 400]);
@@ -250,8 +327,9 @@ class SAS_API {
         }
 
         try {
-            $platforms = SAS_Upload_Service::sanitize_platforms($raw_platforms);
-            $service   = new SAS_Upload_Service();
+            $platforms    = SAS_Upload_Service::sanitize_platforms($raw_platforms);
+            $content_type = SAS_Upload_Service::sanitize_content_type($request->get_param('content_type') ?? 'reel');
+            $service      = new SAS_Upload_Service();
 
             $scheduler = new SAS_Scheduler_Service();
             $when      = $scheduler->get_next_available_date(null, $platforms[0] ?? 'youtube');
@@ -259,7 +337,9 @@ class SAS_API {
             // One backend video with a target per selected platform.
             $video = $service->upload_and_register($files['file'], [
                 'platforms'    => $platforms,
-                'caption'      => pathinfo($files['file']['name'], PATHINFO_FILENAME),
+                'content_type' => $content_type,
+                // Stories don't support captions — see SAS_Upload_Service::send_to_backend().
+                'caption'      => 'story' === $content_type ? '' : pathinfo($files['file']['name'], PATHINFO_FILENAME),
                 'scheduled_at' => $when->format('c'),
             ]);
 
@@ -278,9 +358,10 @@ class SAS_API {
         try {
             $service = new SAS_Upload_Service();
             $result  = $service->init_upload([
-                'file_name'  => sanitize_file_name($data['file_name'] ?? 'video.mp4'),
-                'file_size'  => absint($data['file_size'] ?? 0),
-                'platforms'  => $data['platforms'] ?? $data['platform'] ?? 'youtube',
+                'file_name'    => sanitize_file_name($data['file_name'] ?? 'video.mp4'),
+                'file_size'    => absint($data['file_size'] ?? 0),
+                'platforms'    => $data['platforms'] ?? $data['platform'] ?? 'youtube',
+                'content_type' => $data['content_type'] ?? 'reel',
             ]);
             return new WP_REST_Response($result, 200);
         } catch (\Throwable $e) {
@@ -323,42 +404,21 @@ class SAS_API {
     }
 
     public function publish_now(WP_REST_Request $request): WP_REST_Response|WP_Error {
-        $video_id = absint($request->get_param('id'));
-        $user_id  = get_current_user_id();
+        $id = absint($request->get_param('id'));
 
-        $video_service = new SAS_Video_Service();
-        $video         = $video_service->get($video_id, $user_id);
-
-        if (!$video) {
-            return new WP_Error('not_found', __('Video not found.', 'social-auto-scheduler'), ['status' => 404]);
+        // Publishing is driven by the backend's Celery worker now — dispatch
+        // through its publish endpoint instead of the local wp_sas_queue
+        // table (nothing reads that table anymore since the cron rewrite).
+        $result = SAS_Backend_Client::post("/api/v1/videos/plugin/{$id}/publish/");
+        if (is_wp_error($result)) {
+            return $result;
         }
 
-        // Block videos already queued, being processed, or published —
-        // prevents a second active queue entry for the same video, which
-        // would cause the cron to publish it twice.
-        if (in_array($video['status'], ['queued', 'publishing', 'published'], true)) {
-            return new WP_Error(
-                'invalid_status',
-                sprintf(__('Cannot publish: video is already %s.', 'social-auto-scheduler'), $video['status']),
-                ['status' => 409]
-            );
-        }
-
-        // Set publish time to now so cron processes it on the next tick
-        $video_service->update($video_id, [
-            'status'        => 'queued',
-            'publish_date'  => current_time('mysql'),
-            'error_message' => null,
-        ], $user_id);
-
-        $queue = new SAS_Queue_Service();
-        $queue->add($video_id);
-
-        (new SAS_Log_Service())->info('publish_now', 'Video queued for immediate publishing', [], $video_id);
+        (new SAS_Log_Service())->info('publish_now', 'Video dispatched for immediate publishing', [], $id);
 
         return new WP_REST_Response([
             'success' => true,
-            'message' => __('Video queued — it will publish within 5 minutes.', 'social-auto-scheduler'),
+            'message' => __('Video queued — it will publish within a few minutes.', 'social-auto-scheduler'),
         ], 200);
     }
 
@@ -372,16 +432,72 @@ class SAS_API {
     // Stats & Calendar
     // =========================================================================
 
-    public function get_stats(): WP_REST_Response {
-        $service = new SAS_Video_Service();
-        return new WP_REST_Response($service->get_stats(), 200);
+    public function get_stats(): WP_REST_Response|WP_Error {
+        $result = SAS_Backend_Client::get('/api/v1/videos/plugin/stats/');
+        if (is_wp_error($result)) {
+            return $result;
+        }
+
+        $next = null;
+        if (!empty($result['next_scheduled'])) {
+            $n = $result['next_scheduled'];
+            $publish_date = '';
+            try {
+                $dt = new DateTime($n['scheduled_at']);
+                $dt->setTimezone(wp_timezone());
+                $publish_date = $dt->format('Y-m-d H:i:s');
+            } catch (Exception $e) {
+                // leave blank
+            }
+            $next = ['title' => $n['caption'] ?: __('Untitled video', 'social-auto-scheduler'), 'publish_date' => $publish_date];
+        }
+
+        return new WP_REST_Response([
+            'total'          => $result['total'] ?? 0,
+            'draft'          => $result['draft'] ?? 0,
+            'scheduled'      => $result['scheduled'] ?? 0,
+            'queued'         => $result['queued'] ?? 0,
+            'publishing'     => $result['publishing'] ?? 0,
+            'published'      => $result['published'] ?? 0,
+            'failed'         => $result['failed'] ?? 0,
+            'next_scheduled' => $next,
+            'storage_bytes'  => 0,
+            'storage_human'  => __('N/A (hosted on your server)', 'social-auto-scheduler'),
+        ], 200);
     }
 
-    public function get_calendar(WP_REST_Request $request): WP_REST_Response {
-        $start   = sanitize_text_field($request->get_param('start') ?? date('Y-m-01'));
-        $end     = sanitize_text_field($request->get_param('end')   ?? date('Y-m-t'));
-        $service = new SAS_Video_Service();
-        $events  = $service->get_calendar_events(get_current_user_id(), $start, $end);
+    public function get_calendar(WP_REST_Request $request): WP_REST_Response|WP_Error {
+        $start = sanitize_text_field($request->get_param('start') ?? gmdate('Y-m-01'));
+        $end   = sanitize_text_field($request->get_param('end')   ?? gmdate('Y-m-t'));
+
+        // Backend expects full ISO datetimes for the range filter.
+        $result = SAS_Backend_Client::get('/api/v1/videos/plugin/calendar/', [
+            'start' => $start . 'T00:00:00Z',
+            'end'   => $end . 'T23:59:59Z',
+        ]);
+        if (is_wp_error($result)) {
+            return $result;
+        }
+
+        $events = array_map(function ($ev) {
+            $date = '';
+            try {
+                $dt = new DateTime($ev['scheduled_at']);
+                $dt->setTimezone(wp_timezone());
+                $date = $dt->format('Y-m-d H:i:s');
+            } catch (Exception $e) {
+                // leave blank
+            }
+            return [
+                'id'       => $ev['id'],
+                'title'    => $ev['caption'] ?: __('Untitled video', 'social-auto-scheduler'),
+                'platform' => $ev['platform'] ?? 'youtube',
+                'status'   => $ev['status'] ?? 'scheduled',
+                'date'     => $date,
+                'thumb'    => $ev['thumbnail_url'] ?? '',
+            ];
+        }, is_array($result) ? $result : []);
+
         return new WP_REST_Response($events, 200);
     }
 
@@ -397,7 +513,7 @@ class SAS_API {
         return new WP_REST_Response($settings, 200);
     }
 
-    public function save_settings(WP_REST_Request $request): WP_REST_Response {
+    public function save_settings(WP_REST_Request $request): WP_REST_Response|WP_Error {
         $service  = new SAS_Settings_Service();
         $data     = $request->get_json_params() ?? [];
 
@@ -409,12 +525,30 @@ class SAS_API {
         ];
 
         foreach ($safe_keys as $key) {
-            if (array_key_exists($key, $data)) {
-                $val = is_array($data[$key])
-                    ? array_map('sanitize_text_field', $data[$key])
-                    : sanitize_text_field($data[$key]);
-                $service->set($key, $val);
+            if (!array_key_exists($key, $data)) {
+                continue;
             }
+            $val = is_array($data[$key])
+                ? array_map('sanitize_text_field', $data[$key])
+                : sanitize_text_field($data[$key]);
+
+            // Guard the scheduler's search bounds: uploads_per_day must be at
+            // least 1 and at least one weekday must remain active, otherwise
+            // SAS_Scheduler_Service::get_next_available_date() has no valid
+            // slot to find. (The Settings page HTML also enforces this, but
+            // this REST endpoint is reachable directly.)
+            if ($key === 'uploads_per_day') {
+                $val = (string) max(1, min(15, (int) $val));
+            }
+            if ($key === 'weekdays' && (!is_array($val) || empty($val))) {
+                return new WP_Error(
+                    'invalid_weekdays',
+                    __('At least one active day is required.', 'social-auto-scheduler'),
+                    ['status' => 400]
+                );
+            }
+
+            $service->set($key, $val);
         }
 
         // Secrets encrypted before storage
@@ -445,13 +579,16 @@ class SAS_API {
         return new WP_REST_Response($accounts, 200);
     }
 
-    public function delete_account(WP_REST_Request $request): WP_REST_Response {
+    public function delete_account(WP_REST_Request $request): WP_REST_Response|WP_Error {
         $id = absint($request->get_param('id'));
+        // Accounts live on the backend exclusively now (user-scoped, linked
+        // to websites via M2M) — there is no valid local fallback: the local
+        // wp_sas_accounts table uses a different ID space than the backend's
+        // account IDs, so reusing $id there would silently no-op or delete
+        // an unrelated row. Report the real outcome instead of a fake success.
         $result = SAS_Backend_Client::delete('/api/v1/social-accounts/plugin/' . $id . '/');
         if (is_wp_error($result)) {
-            // Legacy local account fallback
-            $service = new SAS_Token_Service();
-            $service->delete_account($id);
+            return $result;
         }
         return new WP_REST_Response(['success' => true], 200);
     }
@@ -523,5 +660,39 @@ class SAS_API {
         $scheduler = new SAS_Scheduler_Service();
         $date      = $scheduler->get_next_available_date();
         return new WP_REST_Response(['next_date' => $date->format('Y-m-d H:i:s')], 200);
+    }
+
+    // =========================================================================
+    // Contact / Support
+    // =========================================================================
+
+    public function submit_contact(WP_REST_Request $request): WP_REST_Response|WP_Error {
+        $data = $request->get_json_params() ?? [];
+
+        $name    = sanitize_text_field($data['name'] ?? '');
+        $email   = sanitize_email($data['email'] ?? '');
+        $topic   = sanitize_text_field($data['topic'] ?? '');
+        $message = sanitize_textarea_field($data['message'] ?? '');
+
+        if (!$name || !$email || !is_email($email) || strlen(trim($message)) < 10) {
+            return new WP_Error(
+                'invalid_contact',
+                __('Please provide your name, a valid email, and a message (at least 10 characters).', 'social-auto-scheduler'),
+                ['status' => 400]
+            );
+        }
+
+        $result = SAS_Backend_Client::post('/api/v1/contact/plugin/', [
+            'name'    => $name,
+            'email'   => $email,
+            'topic'   => $topic,
+            'message' => $message,
+        ]);
+
+        if (is_wp_error($result)) {
+            return $result;
+        }
+
+        return new WP_REST_Response(['success' => true], 200);
     }
 }

@@ -16,83 +16,97 @@ $success = get_transient( 'sas_license_success' ); delete_transient( 'sas_licens
 // Mask the stored token — show only the last 4 characters.
 $masked_token = $token ? str_repeat( '•', max( 0, strlen( $token ) - 4 ) ) . substr( $token, -4 ) : '';
 ?>
-<div class="wrap sas-wrap">
-    <h1><?php esc_html_e( 'License', 'social-auto-scheduler' ); ?></h1>
+<div class="sas-wrap" data-page="license">
+    <div class="sas-page-header">
+        <h1><?php esc_html_e( 'License', 'social-auto-scheduler' ); ?></h1>
+    </div>
 
     <?php if ( $error ) : ?>
-        <div class="notice notice-error is-dismissible"><p><?php echo esc_html( $error ); ?></p></div>
+        <div class="sas-notice sas-notice--error"><?php echo esc_html( $error ); ?></div>
     <?php endif; ?>
     <?php if ( $success ) : ?>
-        <div class="notice notice-success is-dismissible"><p><?php echo esc_html( $success ); ?></p></div>
+        <div class="sas-notice sas-notice--success"><?php echo esc_html( $success ); ?></div>
     <?php endif; ?>
 
     <!-- Status card -->
-    <div class="sas-card" style="max-width:640px;margin-top:16px;padding:20px;background:#fff;border:1px solid #ddd;border-radius:6px;">
-        <h2 style="margin-top:0"><?php esc_html_e( 'License Status', 'social-auto-scheduler' ); ?></h2>
-        <table class="form-table" style="margin:0">
-            <tr>
-                <th><?php esc_html_e( 'Status', 'social-auto-scheduler' ); ?></th>
-                <td>
+    <div class="sas-card" style="max-width:640px;">
+        <div class="sas-card__header">
+            <h2><?php esc_html_e( 'License Status', 'social-auto-scheduler' ); ?></h2>
+        </div>
+        <div class="sas-card__body">
+            <div class="sas-settings-grid">
+                <div class="sas-field sas-mt-0">
+                    <label><?php esc_html_e( 'Status', 'social-auto-scheduler' ); ?></label>
                     <?php if ( $is_active ) : ?>
-                        <span style="color:#2ea44f;font-weight:600">&#10003; <?php esc_html_e( 'Active', 'social-auto-scheduler' ); ?></span>
+                        <span class="sas-badge sas-badge--published"><span class="dashicons dashicons-yes-alt"></span> <?php esc_html_e( 'Active', 'social-auto-scheduler' ); ?></span>
                     <?php else : ?>
-                        <span style="color:#d73a49;font-weight:600">&#10007; <?php echo esc_html( ucfirst( $status ) ); ?></span>
+                        <span class="sas-badge sas-badge--failed"><span class="dashicons dashicons-warning"></span> <?php echo esc_html( ucfirst( $status ) ); ?></span>
                     <?php endif; ?>
-                </td>
-            </tr>
-            <?php if ( $is_active && $plan ) : ?>
-            <tr>
-                <th><?php esc_html_e( 'Plan', 'social-auto-scheduler' ); ?></th>
-                <td><?php echo esc_html( strtoupper( $plan ) ); ?></td>
-            </tr>
-            <?php endif; ?>
-            <?php if ( $is_active && $masked_token ) : ?>
-            <tr>
-                <th><?php esc_html_e( 'License Key', 'social-auto-scheduler' ); ?></th>
-                <td><code><?php echo esc_html( $masked_token ); ?></code></td>
-            </tr>
-            <?php endif; ?>
-        </table>
+                </div>
+                <?php if ( $is_active && $plan ) : ?>
+                <div class="sas-field sas-mt-0">
+                    <label><?php esc_html_e( 'Plan', 'social-auto-scheduler' ); ?></label>
+                    <span><?php echo esc_html( strtoupper( $plan ) ); ?></span>
+                </div>
+                <?php endif; ?>
+                <?php if ( $is_active && $masked_token ) : ?>
+                <div class="sas-field sas-mt-0">
+                    <label><?php esc_html_e( 'License Key', 'social-auto-scheduler' ); ?></label>
+                    <code><?php echo esc_html( $masked_token ); ?></code>
+                </div>
+                <?php endif; ?>
+            </div>
+        </div>
     </div>
 
     <?php if ( ! $is_active ) : ?>
     <!-- Activation form -->
-    <div class="sas-card" style="max-width:640px;margin-top:24px;padding:20px;background:#fff;border:1px solid #ddd;border-radius:6px;">
-        <h2 style="margin-top:0"><?php esc_html_e( 'Activate License', 'social-auto-scheduler' ); ?></h2>
-        <p>
-            <?php
-            printf(
-                /* translators: %s: link to the licenses page on the frontend website */
-                esc_html__( 'Enter your license key. You can generate a free key from your %s.', 'social-auto-scheduler' ),
-                '<a href="' . esc_url( $sas_frontend . '/licenses' ) . '" target="_blank" rel="noopener noreferrer">' . esc_html__( 'Soulitam dashboard', 'social-auto-scheduler' ) . '</a>'
-            );
-            ?>
-        </p>
-        <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
-            <?php wp_nonce_field( 'sas_activate_license' ); ?>
-            <input type="hidden" name="action" value="sas_activate_license">
-            <table class="form-table">
-                <tr>
-                    <th><label for="sas_license_token"><?php esc_html_e( 'License Key', 'social-auto-scheduler' ); ?></label></th>
-                    <td>
-                        <input type="text" id="sas_license_token" name="sas_license_token"
-                               value="" class="regular-text" placeholder="XXXX-XXXX-XXXX-XXXX" required autocomplete="off">
-                    </td>
-                </tr>
-            </table>
-            <?php submit_button( __( 'Activate License', 'social-auto-scheduler' ), 'primary' ); ?>
-        </form>
+    <div class="sas-card" style="max-width:640px;">
+        <div class="sas-card__header">
+            <h2><?php esc_html_e( 'Activate License', 'social-auto-scheduler' ); ?></h2>
+        </div>
+        <div class="sas-card__body">
+            <p class="sas-field__help" style="margin:0 0 16px;">
+                <?php
+                printf(
+                    /* translators: %s: link to the licenses page on the frontend website */
+                    esc_html__( 'Enter your license key. You can generate a free key from your %s.', 'social-auto-scheduler' ),
+                    '<a href="' . esc_url( $sas_frontend . '/licenses' ) . '" target="_blank" rel="noopener noreferrer" class="sas-link">' . esc_html__( 'Soulitam dashboard', 'social-auto-scheduler' ) . '</a>'
+                );
+                ?>
+            </p>
+            <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+                <?php wp_nonce_field( 'sas_activate_license' ); ?>
+                <input type="hidden" name="action" value="sas_activate_license">
+                <div class="sas-field">
+                    <label for="sas_license_token"><?php esc_html_e( 'License Key', 'social-auto-scheduler' ); ?></label>
+                    <input type="text" id="sas_license_token" name="sas_license_token" class="sas-input"
+                           value="" placeholder="XXXX-XXXX-XXXX-XXXX" required autocomplete="off">
+                </div>
+                <div class="sas-form-actions">
+                    <button type="submit" class="sas-btn sas-btn--primary sas-btn--lg">
+                        <?php esc_html_e( 'Activate License', 'social-auto-scheduler' ); ?>
+                    </button>
+                </div>
+            </form>
+        </div>
     </div>
     <?php else : ?>
     <!-- Deactivation form -->
-    <div class="sas-card" style="max-width:640px;margin-top:24px;padding:20px;background:#fff;border:1px solid #ddd;border-radius:6px;">
-        <h2 style="margin-top:0"><?php esc_html_e( 'Deactivate License', 'social-auto-scheduler' ); ?></h2>
-        <p><?php esc_html_e( 'This will disconnect the plugin from your account. Video publishing will stop.', 'social-auto-scheduler' ); ?></p>
-        <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
-            <?php wp_nonce_field( 'sas_deactivate_license' ); ?>
-            <input type="hidden" name="action" value="sas_deactivate_license">
-            <?php submit_button( __( 'Deactivate License', 'social-auto-scheduler' ), 'delete' ); ?>
-        </form>
+    <div class="sas-card" style="max-width:640px;">
+        <div class="sas-card__header">
+            <h2><?php esc_html_e( 'Deactivate License', 'social-auto-scheduler' ); ?></h2>
+        </div>
+        <div class="sas-card__body">
+            <p class="sas-field__help" style="margin:0 0 16px;"><?php esc_html_e( 'This will disconnect the plugin from your account. Video publishing will stop.', 'social-auto-scheduler' ); ?></p>
+            <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+                <?php wp_nonce_field( 'sas_deactivate_license' ); ?>
+                <input type="hidden" name="action" value="sas_deactivate_license">
+                <button type="submit" class="sas-btn sas-btn--danger">
+                    <?php esc_html_e( 'Deactivate License', 'social-auto-scheduler' ); ?>
+                </button>
+            </form>
+        </div>
     </div>
     <?php endif; ?>
 </div>

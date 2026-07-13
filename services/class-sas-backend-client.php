@@ -126,6 +126,34 @@ class SAS_Backend_Client {
 	}
 
 	/**
+	 * Make an authenticated PATCH request to the backend.
+	 * Automatically refreshes the JWT and retries once on 401.
+	 *
+	 * @param string $path API path.
+	 * @param array  $body Request body (will be JSON-encoded).
+	 * @return array|WP_Error Decoded JSON body or WP_Error.
+	 */
+	public static function patch( string $path, array $body = [] ) {
+		$result = self::do_patch( $path, $body );
+		if ( self::is_unauthorized( $result ) && self::refresh_access_token() ) {
+			$result = self::do_patch( $path, $body );
+		}
+		return $result;
+	}
+
+	private static function do_patch( string $path, array $body = [] ) {
+		$url      = self::get_backend_url() . $path;
+		$response = wp_remote_request( $url, [
+			'method'  => 'PATCH',
+			'timeout' => 30,
+			'headers' => array_merge( self::auth_headers(), [ 'Content-Type' => 'application/json' ] ),
+			'body'    => wp_json_encode( $body ),
+		] );
+
+		return self::parse_response( $response, 'PATCH', $path );
+	}
+
+	/**
 	 * POST without authentication (used for license verify / website register).
 	 */
 	public static function post_public( string $path, array $body = [] ) {

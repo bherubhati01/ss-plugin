@@ -18,7 +18,7 @@ $gate_success = get_transient( 'sas_license_success' ); delete_transient( 'sas_l
     <div class="sas-gate-overlay">
         <div class="sas-gate-modal">
 
-            <div class="sas-gate-icon">🔑</div>
+            <div class="sas-gate-icon"><span class="dashicons dashicons-lock"></span></div>
 
             <h1 class="sas-gate-title"><?php esc_html_e( 'Activate Your Free License', 'social-auto-scheduler' ); ?></h1>
             <p class="sas-gate-sub">
@@ -151,11 +151,16 @@ $gate_success = get_transient( 'sas_license_success' ); delete_transient( 'sas_l
         width: 64px; height: 64px;
         margin: 0 auto 18px;
         display: flex; align-items: center; justify-content: center;
-        font-size: 30px;
         border-radius: 16px;
         background: rgba(99,102,241,0.15);
         border: 1px solid rgba(99,102,241,0.35);
         box-shadow: 0 0 32px rgba(99,102,241,0.35);
+        color: #a5b4fc;
+    }
+    .sas-gate-icon .dashicons {
+        font-size: 28px;
+        width: 28px;
+        height: 28px;
     }
     .sas-gate-title {
         margin: 0 0 10px;

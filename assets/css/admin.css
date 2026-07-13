@@ -1,55 +1,79 @@
 /* ============================================================
    Social Auto Scheduler – Admin CSS
-   Light + Dark mode, fully responsive
+   Refined light admin (Untitled-UI-inspired), brand-matched
+   indigo accent, dark mode via .sas-dark toggle.
    ============================================================ */
 
 /* ---- CSS Custom Properties ---- */
 :root {
-    --sas-primary:        #2563EB;
-    --sas-primary-dark:   #1D4ED8;
-    --sas-primary-light:  #EFF6FF;
-    --sas-success:        #10B981;
-    --sas-warning:        #F59E0B;
-    --sas-danger:         #EF4444;
-    --sas-info:           #3B82F6;
+    --sas-primary:        #4F46E5;
+    --sas-primary-dark:   #4338CA;
+    --sas-primary-light:  #EEF2FF;
+    --sas-success:        #12B76A;
+    --sas-success-bg:     #ECFDF3;
+    --sas-success-text:   #027A48;
+    --sas-warning:        #F79009;
+    --sas-warning-bg:     #FFFAEB;
+    --sas-warning-text:   #B54708;
+    --sas-danger:         #F04438;
+    --sas-danger-bg:      #FEF3F2;
+    --sas-danger-text:    #B42318;
+    --sas-info:           #2E90FA;
+    --sas-info-bg:        #EFF8FF;
+    --sas-info-text:      #175CD3;
 
-    --sas-bg:             #F9FAFB;
+    --sas-bg:             #F7F8FA;
     --sas-surface:        #FFFFFF;
-    --sas-surface-2:      #F3F4F6;
-    --sas-border:         #E5E7EB;
-    --sas-border-focus:   #2563EB;
+    --sas-surface-2:      #F9FAFB;
+    --sas-border:         #E4E7EC;
+    --sas-border-focus:   #4F46E5;
 
-    --sas-text:           #111827;
-    --sas-text-muted:     #6B7280;
+    --sas-text:           #101828;
+    --sas-text-muted:     #667085;
     --sas-text-on-primary:#FFFFFF;
 
     --sas-radius:         10px;
-    --sas-radius-sm:      6px;
-    --sas-shadow:         0 1px 4px rgba(0,0,0,.08);
-    --sas-shadow-md:      0 4px 12px rgba(0,0,0,.12);
+    --sas-radius-sm:      7px;
+    --sas-radius-lg:      14px;
+    --sas-shadow:         0 1px 2px rgba(16,24,40,.06);
+    --sas-shadow-md:      0 4px 12px rgba(16,24,40,.08), 0 2px 4px rgba(16,24,40,.04);
+    --sas-shadow-lg:      0 16px 40px rgba(16,24,40,.14), 0 4px 10px rgba(16,24,40,.05);
 
-    --sas-transition:     all .18s ease;
+    --sas-transition:     all .16s ease;
 
     /* Status colours */
-    --sas-draft:          #6B7280;
-    --sas-queued:         #8B5CF6;
-    --sas-scheduled:      #2563EB;
-    --sas-publishing:     #F59E0B;
-    --sas-published:      #10B981;
-    --sas-failed:         #EF4444;
-    --sas-cancelled:      #9CA3AF;
+    --sas-draft:          #667085;
+    --sas-queued:         #7A5AF8;
+    --sas-scheduled:      #4F46E5;
+    --sas-publishing:     #F79009;
+    --sas-published:      #12B76A;
+    --sas-failed:         #F04438;
+    --sas-cancelled:      #98A2B3;
 }
 
 /* ---- Dark mode via class on <body> ---- */
 body.sas-dark {
-    --sas-bg:           #0F172A;
-    --sas-surface:      #1E293B;
-    --sas-surface-2:    #273347;
-    --sas-border:       #334155;
-    --sas-border-focus: #60A5FA;
-    --sas-text:         #F1F5F9;
-    --sas-text-muted:   #94A3B8;
-    --sas-primary-light:#1E3A5F;
+    --sas-primary-light: rgba(99,102,241,.16);
+    --sas-success-bg:    rgba(18,183,106,.14);
+    --sas-success-text:  #6CE9A6;
+    --sas-warning-bg:    rgba(247,144,9,.14);
+    --sas-warning-text:  #FDB022;
+    --sas-danger-bg:     rgba(240,68,56,.14);
+    --sas-danger-text:   #FDA29B;
+    --sas-info-bg:       rgba(46,144,250,.14);
+    --sas-info-text:     #84CAFF;
+
+    --sas-bg:           #0C111D;
+    --sas-surface:      #1D2939;
+    --sas-surface-2:    #161B26;
+    --sas-border:       #344054;
+    --sas-border-focus: #818CF8;
+    --sas-text:         #F5F5F6;
+    --sas-text-muted:   #98A2B3;
+
+    --sas-shadow:       0 1px 2px rgba(0,0,0,.3);
+    --sas-shadow-md:    0 4px 14px rgba(0,0,0,.4);
+    --sas-shadow-lg:    0 20px 44px rgba(0,0,0,.5);
 }
 
 /* ============================================================
@@ -63,6 +87,7 @@ body.sas-dark {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     font-size: 14px;
     line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
 }
 
 .sas-page-header {
@@ -71,12 +96,13 @@ body.sas-dark {
     justify-content: space-between;
     flex-wrap: wrap;
     gap: 12px;
-    margin: 20px 0 24px;
+    margin: 24px 0 28px;
 }
 
 .sas-page-header h1 {
-    font-size: 22px;
+    font-size: 23px;
     font-weight: 700;
+    letter-spacing: -0.01em;
     margin: 0;
     color: var(--sas-text);
 }
@@ -122,6 +148,7 @@ body.sas-dark {
 .sas-card__header h2 {
     font-size: 15px;
     font-weight: 600;
+    letter-spacing: -0.005em;
     margin: 0;
     color: var(--sas-text);
 }
@@ -141,13 +168,23 @@ body.sas-dark {
 }
 
 .sas-stat-card {
+    position: relative;
     background: var(--sas-surface);
     border: 1px solid var(--sas-border);
     border-radius: var(--sas-radius);
     box-shadow: var(--sas-shadow);
-    padding: 20px 16px;
-    text-align: center;
+    padding: 18px 18px 16px;
     transition: var(--sas-transition);
+    overflow: hidden;
+}
+
+.sas-stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2.5px;
+    background: var(--sas-text-muted);
+    opacity: .35;
 }
 
 .sas-stat-card:hover {
@@ -155,20 +192,41 @@ body.sas-dark {
     transform: translateY(-1px);
 }
 
-.sas-stat-card--scheduled { border-top: 3px solid var(--sas-scheduled); }
-.sas-stat-card--queued    { border-top: 3px solid var(--sas-queued); }
-.sas-stat-card--published { border-top: 3px solid var(--sas-published); }
-.sas-stat-card--failed    { border-top: 3px solid var(--sas-failed); }
+.sas-stat-card--scheduled::before { background: var(--sas-scheduled); opacity: 1; }
+.sas-stat-card--queued::before    { background: var(--sas-queued); opacity: 1; }
+.sas-stat-card--published::before { background: var(--sas-published); opacity: 1; }
+.sas-stat-card--failed::before    { background: var(--sas-failed); opacity: 1; }
 
 .sas-stat-icon {
-    font-size: 24px;
-    margin-bottom: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    background: var(--sas-surface-2);
+    color: var(--sas-text-muted);
+    margin-bottom: 10px;
 }
 
+.sas-stat-icon .dashicons {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+    line-height: 1;
+}
+
+.sas-stat-card--scheduled .sas-stat-icon { background: var(--sas-primary-light); color: var(--sas-scheduled); }
+.sas-stat-card--queued .sas-stat-icon    { background: rgba(122,90,248,.12); color: var(--sas-queued); }
+.sas-stat-card--published .sas-stat-icon { background: var(--sas-success-bg); color: var(--sas-published); }
+.sas-stat-card--failed .sas-stat-icon    { background: var(--sas-danger-bg); color: var(--sas-failed); }
+
 .sas-stat-number {
-    font-size: 32px;
+    font-size: 28px;
     font-weight: 700;
-    color: var(--sas-primary);
+    letter-spacing: -0.01em;
+    font-variant-numeric: tabular-nums;
+    color: var(--sas-text);
     line-height: 1;
 }
 
@@ -178,6 +236,7 @@ body.sas-dark {
     font-size: 12px;
     color: var(--sas-text-muted);
     margin-top: 6px;
+    font-weight: 500;
 }
 
 /* ============================================================
@@ -190,7 +249,7 @@ body.sas-dark {
     padding: 8px 16px;
     border-radius: var(--sas-radius-sm);
     font-size: 13px;
-    font-weight: 500;
+    font-weight: 600;
     cursor: pointer;
     border: 1px solid transparent;
     transition: var(--sas-transition);
@@ -200,11 +259,15 @@ body.sas-dark {
 }
 
 .sas-btn--primary {
-    background: var(--sas-primary);
+    background: linear-gradient(180deg, var(--sas-primary), var(--sas-primary-dark));
     color: var(--sas-text-on-primary);
-    border-color: var(--sas-primary);
+    border-color: var(--sas-primary-dark);
+    box-shadow: 0 1px 2px rgba(16,24,40,.08), 0 0 0 1px rgba(67,56,202,.05);
 }
-.sas-btn--primary:hover { background: var(--sas-primary-dark); }
+.sas-btn--primary:hover {
+    background: linear-gradient(180deg, var(--sas-primary-dark), var(--sas-primary-dark));
+    box-shadow: 0 2px 6px rgba(79,70,229,.25);
+}
 
 .sas-btn--secondary {
     background: var(--sas-surface);
@@ -218,22 +281,22 @@ body.sas-dark {
     color: #fff;
     border-color: var(--sas-danger);
 }
-.sas-btn--danger:hover { background: #DC2626; }
+.sas-btn--danger:hover { background: #D92D20; }
 
 .sas-btn--ghost {
     background: transparent;
     color: var(--sas-text-muted);
     border-color: transparent;
 }
-.sas-btn--ghost:hover { color: var(--sas-danger); background: rgba(239,68,68,.08); }
+.sas-btn--ghost:hover { color: var(--sas-danger); background: var(--sas-danger-bg); }
 
 .sas-btn--publish-now {
-    background: linear-gradient(135deg, #F59E0B, #D97706);
+    background: linear-gradient(180deg, #F79009, #DC6803);
     color: #fff;
-    border-color: #D97706;
+    border-color: #DC6803;
     font-weight: 700;
 }
-.sas-btn--publish-now:hover { background: linear-gradient(135deg, #D97706, #B45309); }
+.sas-btn--publish-now:hover { background: linear-gradient(180deg, #DC6803, #B54708); }
 
 .sas-btn--sm { padding: 4px 10px; font-size: 12px; }
 .sas-btn--lg { padding: 10px 24px; font-size: 15px; }
@@ -242,6 +305,11 @@ body.sas-dark {
 .sas-btn[disabled] {
     opacity: .5;
     cursor: not-allowed;
+}
+
+.sas-btn:focus-visible {
+    outline: 2px solid var(--sas-border-focus);
+    outline-offset: 2px;
 }
 
 .sas-btn .dashicons { font-size: 16px; width: 16px; height: 16px; line-height: 1; }
@@ -259,7 +327,7 @@ body.sas-dark {
     background: var(--sas-surface);
     color: var(--sas-text);
     font-size: 13px;
-    transition: border-color .15s;
+    transition: border-color .15s, box-shadow .15s;
     box-sizing: border-box;
 }
 
@@ -268,7 +336,7 @@ body.sas-dark {
 .sas-textarea:focus {
     outline: none;
     border-color: var(--sas-border-focus);
-    box-shadow: 0 0 0 2px rgba(37,99,235,.15);
+    box-shadow: 0 0 0 3.5px rgba(79,70,229,.12);
 }
 
 .sas-textarea { resize: vertical; }
@@ -276,8 +344,8 @@ body.sas-dark {
 .sas-input:disabled,
 .sas-select:disabled,
 .sas-textarea:disabled {
-    background: var(--sas-bg, #f3f4f6);
-    color: var(--sas-text-muted, #888);
+    background: var(--sas-surface-2);
+    color: var(--sas-text-muted);
     cursor: not-allowed;
 }
 
@@ -287,7 +355,7 @@ body.sas-dark {
 
 .sas-field label {
     display: block;
-    font-weight: 500;
+    font-weight: 600;
     margin-bottom: 6px;
     color: var(--sas-text);
     font-size: 13px;
@@ -319,8 +387,8 @@ body.sas-dark {
 
 /* Validation error state for inputs */
 .sas-input--error {
-    border-color: #ef4444 !important;
-    box-shadow: 0 0 0 2px rgba(239,68,68,.15);
+    border-color: var(--sas-danger) !important;
+    box-shadow: 0 0 0 3.5px rgba(240,68,56,.12) !important;
 }
 
 /* Weekday picker */
@@ -343,9 +411,9 @@ body.sas-dark {
     line-height: 40px;
     text-align: center;
     border-radius: 50%;
-    border: 2px solid var(--sas-border);
+    border: 1.5px solid var(--sas-border);
     font-size: 12px;
-    font-weight: 500;
+    font-weight: 600;
     color: var(--sas-text-muted);
     transition: var(--sas-transition);
 }
@@ -354,6 +422,7 @@ body.sas-dark {
     background: var(--sas-primary);
     border-color: var(--sas-primary);
     color: #fff;
+    box-shadow: 0 2px 6px rgba(79,70,229,.3);
 }
 
 .sas-form-actions {
@@ -373,7 +442,7 @@ body.sas-dark {
 
 .sas-platform-selector__label {
     font-size: 13px;
-    font-weight: 500;
+    font-weight: 600;
     color: var(--sas-text-muted);
     white-space: nowrap;
 }
@@ -391,7 +460,7 @@ body.sas-dark {
     gap: 6px;
     padding: 6px 14px;
     border-radius: 99px;
-    border: 2px solid var(--sas-border);
+    border: 1.5px solid var(--sas-border);
     font-size: 13px;
     font-weight: 600;
     color: var(--sas-text-muted);
@@ -419,11 +488,34 @@ body.sas-dark {
     color: #fff;
 }
 
+/* Checked / active state – Reel/Video content type */
+.sas-platform-toggle input:checked + .sas-platform-toggle__inner--reel {
+    background: var(--sas-primary);
+    border-color: var(--sas-primary);
+    color: #fff;
+}
+
+/* Checked / active state – Story content type (Instagram-only, so it
+   borrows the Instagram gradient as a visual cue). */
+.sas-platform-toggle input:checked + .sas-platform-toggle__inner--story {
+    background: linear-gradient(135deg, #f09433, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888);
+    border-color: #dc2743;
+    color: #fff;
+}
+
+.sas-platform-toggle--disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+}
+.sas-platform-toggle--disabled .sas-platform-toggle__inner {
+    pointer-events: none;
+}
+
 /* ============================================================
    Upload Area
    ============================================================ */
 .sas-upload-area {
-    border: 2px dashed var(--sas-border);
+    border: 1.5px dashed var(--sas-border);
     border-radius: var(--sas-radius);
     padding: 40px 20px;
     text-align: center;
@@ -438,13 +530,30 @@ body.sas-dark {
     background: var(--sas-primary-light);
 }
 
-.sas-upload-area__icon { font-size: 40px; }
+.sas-upload-area__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    background: var(--sas-surface);
+    border: 1px solid var(--sas-border);
+    color: var(--sas-primary);
+    margin: 0 auto;
+}
+
+.sas-upload-area__icon .dashicons {
+    font-size: 20px;
+    width: 20px;
+    height: 20px;
+}
 
 .sas-upload-area__title {
-    font-size: 15px;
-    font-weight: 500;
+    font-size: 14px;
+    font-weight: 600;
     color: var(--sas-text);
-    margin: 8px 0 4px;
+    margin: 12px 0 4px;
 }
 
 .sas-upload-area__hint {
@@ -479,7 +588,7 @@ body.sas-dark {
 
 .sas-upload-item__platform {
     font-size: 11px;
-    font-weight: 600;
+    font-weight: 700;
     color: var(--sas-primary);
     background: var(--sas-primary-light);
     border-radius: 99px;
@@ -500,7 +609,7 @@ body.sas-dark {
 
 .sas-upload-item__progress-bar {
     height: 100%;
-    background: var(--sas-primary);
+    background: linear-gradient(90deg, var(--sas-primary), #7A5AF8);
     border-radius: 99px;
     transition: width .3s ease;
 }
@@ -510,16 +619,23 @@ body.sas-dark {
     color: var(--sas-text-muted);
     min-width: 36px;
     text-align: right;
+    font-variant-numeric: tabular-nums;
 }
 
-.sas-upload-item__status { font-size: 12px; }
-.sas-upload-item__status--done  { color: var(--sas-success); }
-.sas-upload-item__status--error { color: var(--sas-danger); }
+.sas-upload-item__status { font-size: 12px; display: inline-flex; align-items: center; gap: 4px; }
+.sas-upload-item__status .dashicons { font-size: 14px; width: 14px; height: 14px; }
+.sas-upload-item__status--done  { color: var(--sas-success-text); }
+.sas-upload-item__status--error { color: var(--sas-danger-text); }
 
 /* ============================================================
    Tables
    ============================================================ */
-.sas-table-wrap { overflow-x: auto; }
+.sas-table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--sas-border);
+    border-radius: var(--sas-radius);
+    background: var(--sas-surface);
+}
 
 .sas-table {
     width: 100%;
@@ -531,22 +647,23 @@ body.sas-dark {
     background: var(--sas-surface-2);
     color: var(--sas-text-muted);
     font-size: 11px;
-    font-weight: 600;
+    font-weight: 700;
     text-transform: uppercase;
     letter-spacing: .05em;
-    padding: 10px 12px;
+    padding: 11px 14px;
     text-align: left;
     border-bottom: 1px solid var(--sas-border);
     white-space: nowrap;
 }
 
 .sas-table td {
-    padding: 10px 12px;
+    padding: 12px 14px;
     border-bottom: 1px solid var(--sas-border);
     vertical-align: middle;
     color: var(--sas-text);
 }
 
+.sas-table tbody tr { transition: background .12s; }
 .sas-table tbody tr:hover { background: var(--sas-surface-2); }
 .sas-table tbody tr:last-child td { border-bottom: none; }
 
@@ -554,21 +671,24 @@ body.sas-dark {
     width: 64px;
     height: 36px;
     object-fit: cover;
-    border-radius: 4px;
+    border-radius: 6px;
     background: var(--sas-surface-2);
+    border: 1px solid var(--sas-border);
 }
 
 .sas-table__no-thumb {
     width: 64px;
     height: 36px;
     background: var(--sas-surface-2);
-    border-radius: 4px;
+    border: 1px solid var(--sas-border);
+    border-radius: 6px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    font-size: 18px;
     color: var(--sas-text-muted);
 }
+
+.sas-table__no-thumb .dashicons { font-size: 16px; width: 16px; height: 16px; }
 
 .sas-table__actions {
     display: flex;
@@ -589,27 +709,27 @@ body.sas-dark {
    ============================================================ */
 .sas-badge {
     display: inline-block;
-    padding: 2px 8px;
+    padding: 2px 9px;
     border-radius: 99px;
     font-size: 11px;
-    font-weight: 600;
+    font-weight: 700;
     text-transform: uppercase;
     letter-spacing: .04em;
     white-space: nowrap;
 }
 
-.sas-badge--draft      { background: rgba(107,114,128,.15); color: var(--sas-draft); }
-.sas-badge--queued     { background: rgba(139,92,246,.12);  color: var(--sas-queued); }
-.sas-badge--scheduled  { background: rgba(37,99,235,.12);   color: var(--sas-scheduled); }
-.sas-badge--publishing { background: rgba(245,158,11,.12);  color: var(--sas-publishing); }
-.sas-badge--published  { background: rgba(16,185,129,.12);  color: var(--sas-published); }
-.sas-badge--failed     { background: rgba(239,68,68,.12);   color: var(--sas-failed); }
-.sas-badge--cancelled  { background: rgba(156,163,175,.15); color: var(--sas-cancelled); }
+.sas-badge--draft      { background: var(--sas-surface-2); color: var(--sas-draft); border: 1px solid var(--sas-border); }
+.sas-badge--queued     { background: rgba(122,90,248,.12); color: var(--sas-queued); }
+.sas-badge--scheduled  { background: var(--sas-primary-light); color: var(--sas-scheduled); }
+.sas-badge--publishing { background: var(--sas-warning-bg); color: var(--sas-warning-text); }
+.sas-badge--published  { background: var(--sas-success-bg); color: var(--sas-success-text); }
+.sas-badge--failed     { background: var(--sas-danger-bg); color: var(--sas-danger-text); }
+.sas-badge--cancelled  { background: var(--sas-surface-2); color: var(--sas-cancelled); border: 1px solid var(--sas-border); }
 
-.sas-badge--level-info    { background: rgba(59,130,246,.12); color: #2563EB; }
-.sas-badge--level-warning { background: rgba(245,158,11,.12); color: #D97706; }
-.sas-badge--level-error   { background: rgba(239,68,68,.12);  color: #DC2626; }
-.sas-badge--level-debug   { background: rgba(107,114,128,.12);color: #6B7280; }
+.sas-badge--level-info    { background: var(--sas-info-bg); color: var(--sas-info-text); }
+.sas-badge--level-warning { background: var(--sas-warning-bg); color: var(--sas-warning-text); }
+.sas-badge--level-error   { background: var(--sas-danger-bg); color: var(--sas-danger-text); }
+.sas-badge--level-debug   { background: var(--sas-surface-2); color: var(--sas-text-muted); border: 1px solid var(--sas-border); }
 
 /* ============================================================
    Platform badges
@@ -617,9 +737,19 @@ body.sas-dark {
 .sas-platform {
     display: inline-flex;
     align-items: center;
-    gap: 5px;
+    gap: 6px;
     font-size: 12px;
     font-weight: 600;
+    text-transform: capitalize;
+}
+
+.sas-platform::before {
+    content: '';
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: currentColor;
 }
 
 .sas-platform--youtube  { color: #FF0000; }
@@ -674,6 +804,7 @@ body.sas-dark {
     color: var(--sas-text);
     cursor: pointer;
     font-size: 13px;
+    font-variant-numeric: tabular-nums;
     transition: var(--sas-transition);
 }
 
@@ -719,14 +850,15 @@ body.sas-dark {
 
 .sas-calendar-title {
     font-size: 18px;
-    font-weight: 600;
+    font-weight: 700;
+    letter-spacing: -0.01em;
     margin: 0;
     color: var(--sas-text);
 }
 
 .sas-calendar-grid {
     border: 1px solid var(--sas-border);
-    border-radius: var(--sas-radius-sm);
+    border-radius: var(--sas-radius);
     overflow: hidden;
 }
 
@@ -741,8 +873,9 @@ body.sas-dark {
     padding: 10px 4px;
     text-align: center;
     font-size: 11px;
-    font-weight: 600;
+    font-weight: 700;
     text-transform: uppercase;
+    letter-spacing: .05em;
     color: var(--sas-text-muted);
 }
 
@@ -765,13 +898,14 @@ body.sas-dark {
 
 .sas-cal-day--empty { background: var(--sas-surface-2); }
 .sas-cal-day--today { background: var(--sas-primary-light); }
-.sas-cal-day--drag-over { background: var(--sas-primary-light); outline: 2px dashed var(--sas-primary); }
+.sas-cal-day--drag-over { background: var(--sas-primary-light); outline: 2px dashed var(--sas-primary); outline-offset: -2px; }
 
 .sas-cal-day__num {
     font-size: 13px;
     font-weight: 600;
     color: var(--sas-text);
     margin-bottom: 4px;
+    font-variant-numeric: tabular-nums;
 }
 
 .sas-cal-day--today .sas-cal-day__num {
@@ -789,7 +923,7 @@ body.sas-dark {
     text-overflow: ellipsis;
     cursor: pointer;
     color: #fff;
-    font-weight: 500;
+    font-weight: 600;
 }
 
 .sas-cal-event--scheduled  { background: var(--sas-scheduled); }
@@ -804,7 +938,7 @@ body.sas-dark {
     background: var(--sas-surface);
     border: 1px solid var(--sas-border);
     border-radius: var(--sas-radius);
-    box-shadow: var(--sas-shadow-md);
+    box-shadow: var(--sas-shadow-lg);
     padding: 14px;
     min-width: 200px;
     font-size: 13px;
@@ -839,8 +973,9 @@ body.sas-dark {
 }
 
 .sas-account-card h3 {
-    font-size: 17px;
+    font-size: 16px;
     font-weight: 700;
+    letter-spacing: -0.005em;
     margin: 0 0 8px;
     color: var(--sas-text);
 }
@@ -859,9 +994,17 @@ body.sas-dark {
 }
 
 .sas-account-card__status--connected {
-    color: var(--sas-success);
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--sas-success-text);
+    background: var(--sas-success-bg);
+    padding: 3px 10px;
+    border-radius: 99px;
     font-weight: 600;
 }
+
+.sas-account-card__status--connected .dashicons { font-size: 14px; width: 14px; height: 14px; }
 
 .sas-account-card__actions { display: flex; gap: 8px; justify-content: center; }
 
@@ -876,7 +1019,7 @@ body.sas-dark {
 
 .sas-connected-account-row:last-child { border-bottom: none; }
 
-.sas-connected-account-row__name { flex: 1; font-weight: 500; }
+.sas-connected-account-row__name { flex: 1; font-weight: 600; }
 .sas-connected-account-row__platform { color: var(--sas-text-muted); font-size: 12px; }
 .sas-connected-account-row__expires { color: var(--sas-text-muted); font-size: 12px; }
 
@@ -893,7 +1036,7 @@ body.sas-dark {
 
 .sas-guide-section h3 {
     font-size: 14px;
-    font-weight: 600;
+    font-weight: 700;
     color: var(--sas-text);
     margin: 0 0 10px;
 }
@@ -933,15 +1076,15 @@ body.sas-dark {
 .sas-modal__backdrop {
     position: absolute;
     inset: 0;
-    background: rgba(0,0,0,.5);
+    background: rgba(16,24,40,.55);
     animation: sasBackdropIn .2s ease;
 }
 
 .sas-modal__content {
     position: relative;
     background: var(--sas-surface);
-    border-radius: var(--sas-radius);
-    box-shadow: 0 20px 60px rgba(0,0,0,.2);
+    border-radius: var(--sas-radius-lg);
+    box-shadow: var(--sas-shadow-lg);
     width: 100%;
     max-width: 520px;
     max-height: 90vh;
@@ -960,7 +1103,7 @@ body.sas-dark {
     border-bottom: 1px solid var(--sas-border);
 }
 
-.sas-modal__header h3 { margin: 0; font-size: 16px; font-weight: 600; color: var(--sas-text); }
+.sas-modal__header h3 { margin: 0; font-size: 16px; font-weight: 700; color: var(--sas-text); }
 
 .sas-modal__close {
     background: none;
@@ -988,22 +1131,20 @@ body.sas-dark {
    Notices / Toasts
    ============================================================ */
 .sas-notice {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
     padding: 12px 16px;
     border-radius: var(--sas-radius-sm);
     font-size: 13px;
     margin-bottom: 16px;
-    border-left: 4px solid;
+    border: 1px solid transparent;
 }
 
-.sas-notice--success { border-color: var(--sas-success); background: rgba(16,185,129,.1); color: #065F46; }
-.sas-notice--error   { border-color: var(--sas-danger);  background: rgba(239,68,68,.1);  color: #7F1D1D; }
-.sas-notice--info    { border-color: var(--sas-info);    background: rgba(59,130,246,.1); color: #1E3A5F; }
-.sas-notice--warning { border-color: var(--sas-warning); background: rgba(245,158,11,.1); color: #78350F; }
-
-body.sas-dark .sas-notice--success { color: #6EE7B7; }
-body.sas-dark .sas-notice--error   { color: #FCA5A5; }
-body.sas-dark .sas-notice--info    { color: #93C5FD; }
-body.sas-dark .sas-notice--warning { color: #FCD34D; }
+.sas-notice--success { border-color: rgba(18,183,106,.25); background: var(--sas-success-bg); color: var(--sas-success-text); }
+.sas-notice--error   { border-color: rgba(240,68,56,.25);  background: var(--sas-danger-bg);  color: var(--sas-danger-text); }
+.sas-notice--info    { border-color: rgba(46,144,250,.25); background: var(--sas-info-bg);    color: var(--sas-info-text); }
+.sas-notice--warning { border-color: rgba(247,144,9,.25);  background: var(--sas-warning-bg); color: var(--sas-warning-text); }
 
 /* Toast container */
 #sas-toast-container {
@@ -1025,7 +1166,7 @@ body.sas-dark .sas-notice--warning { color: #FCD34D; }
     background: var(--sas-surface);
     border: 1px solid var(--sas-border);
     border-radius: var(--sas-radius);
-    box-shadow: var(--sas-shadow-md);
+    box-shadow: var(--sas-shadow-lg);
     font-size: 13px;
     font-weight: 500;
     color: var(--sas-text);
@@ -1035,9 +1176,14 @@ body.sas-dark .sas-notice--warning { color: #FCD34D; }
     max-width: 360px;
 }
 
-.sas-toast--success { border-left: 4px solid var(--sas-success); }
-.sas-toast--error   { border-left: 4px solid var(--sas-danger); }
-.sas-toast--info    { border-left: 4px solid var(--sas-info); }
+.sas-toast .dashicons { font-size: 17px; width: 17px; height: 17px; flex-shrink: 0; }
+
+.sas-toast--success { border-left: 3px solid var(--sas-success); }
+.sas-toast--success .dashicons { color: var(--sas-success); }
+.sas-toast--error   { border-left: 3px solid var(--sas-danger); }
+.sas-toast--error .dashicons { color: var(--sas-danger); }
+.sas-toast--info    { border-left: 3px solid var(--sas-info); }
+.sas-toast--info .dashicons { color: var(--sas-info); }
 
 @keyframes sasToastIn  { from { opacity: 0; transform: translateX(30px); } to { opacity: 1; transform: none; } }
 @keyframes sasToastOut { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateX(30px); } }
@@ -1103,12 +1249,12 @@ body.sas-dark .sas-notice--warning { color: #FCD34D; }
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 16px;
+    color: var(--sas-text-muted);
     box-shadow: var(--sas-shadow);
     transition: var(--sas-transition);
 }
 
-#sas-dark-toggle:hover { box-shadow: var(--sas-shadow-md); }
+#sas-dark-toggle:hover { box-shadow: var(--sas-shadow-md); color: var(--sas-primary); border-color: var(--sas-primary); }
 
 /* ============================================================
    Link
@@ -1117,6 +1263,7 @@ body.sas-dark .sas-notice--warning { color: #FCD34D; }
     color: var(--sas-primary);
     text-decoration: none;
     font-size: 13px;
+    font-weight: 600;
 }
 
 .sas-link:hover { text-decoration: underline; }

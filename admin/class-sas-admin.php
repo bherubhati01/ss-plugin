@@ -27,6 +27,7 @@ class SAS_Admin {
             ['sas-accounts',  __('Accounts',  'social-auto-scheduler'), [$this, 'render_accounts']],
             ['sas-settings',  __('Settings',  'social-auto-scheduler'), [$this, 'render_settings']],
             ['sas-logs',      __('Logs',      'social-auto-scheduler'), [$this, 'render_logs']],
+            ['sas-support',   __('Support',   'social-auto-scheduler'), [$this, 'render_support']],
             ['sas-license',   __('License',   'social-auto-scheduler'), [$this, 'render_license']],
         ];
 
@@ -51,6 +52,8 @@ class SAS_Admin {
             'auto-scheduler_page_sas-accounts',
             'auto-scheduler_page_sas-settings',
             'auto-scheduler_page_sas-logs',
+            'auto-scheduler_page_sas-support',
+            'auto-scheduler_page_sas-license',
         ];
 
         if (!in_array($hook, $sas_pages, true)) {
@@ -77,6 +80,43 @@ class SAS_Admin {
                 'connecting'        => __('Connecting…', 'social-auto-scheduler'),
             ],
         ]);
+    }
+
+    // -------------------------------------------------------------------------
+    // Footer legal links (shown at the bottom of every plugin admin page)
+    // -------------------------------------------------------------------------
+
+    public function admin_footer_text_links( string $text ): string {
+        $screen      = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
+        $sas_screens = [
+            'toplevel_page_social-auto-scheduler',
+            'auto-scheduler_page_sas-dashboard',
+            'auto-scheduler_page_sas-videos',
+            'auto-scheduler_page_sas-calendar',
+            'auto-scheduler_page_sas-accounts',
+            'auto-scheduler_page_sas-settings',
+            'auto-scheduler_page_sas-logs',
+            'auto-scheduler_page_sas-support',
+            'auto-scheduler_page_sas-license',
+        ];
+
+        if ( ! $screen || ! in_array( $screen->id, $sas_screens, true ) ) {
+            return $text;
+        }
+
+        $frontend = untrailingslashit( SAS_FRONTEND_URL );
+        $links    = [
+            [ __( 'Privacy Policy', 'social-auto-scheduler' ), $frontend . '/privacy' ],
+            [ __( 'Terms of Service', 'social-auto-scheduler' ), $frontend . '/terms' ],
+            [ __( 'Data Deletion', 'social-auto-scheduler' ), $frontend . '/data-deletion' ],
+        ];
+
+        $rendered = [];
+        foreach ( $links as [ $label, $url ] ) {
+            $rendered[] = '<a href="' . esc_url( $url ) . '" target="_blank" rel="noopener noreferrer">' . esc_html( $label ) . '</a>';
+        }
+
+        return 'Social Auto Scheduler &nbsp;&middot;&nbsp; ' . implode( ' &nbsp;|&nbsp; ', $rendered );
     }
 
     // -------------------------------------------------------------------------
@@ -176,6 +216,12 @@ class SAS_Admin {
     public function render_license(): void {
         // Always accessible — holds the advanced activation form and deactivation.
         require_once SAS_PLUGIN_DIR . 'admin/templates/license.php';
+    }
+
+    public function render_support(): void {
+        // Always accessible — users need Support most when their license has
+        // lapsed or something else is broken, so this never shows the gate.
+        require_once SAS_PLUGIN_DIR . 'admin/templates/support.php';
     }
 
     // -------------------------------------------------------------------------

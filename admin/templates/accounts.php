@@ -77,4 +77,23 @@ $sas_frontend = untrailingslashit( SAS_FRONTEND_URL );
 			</ol>
 		</div>
 	</div>
+
+	<!-- Legal & data -->
+	<div class="sas-card">
+		<div class="sas-card__header">
+			<h2><?php esc_html_e( 'Legal & Data', 'social-auto-scheduler' ); ?></h2>
+		</div>
+		<div class="sas-card__body">
+			<p class="sas-field__help">
+				<?php esc_html_e( 'Connecting a YouTube or Instagram account shares limited profile and publishing data with Soulitam. See how it&#8217;s used, or remove it at any time.', 'social-auto-scheduler' ); ?>
+			</p>
+			<p style="margin-top:8px;">
+				<a href="<?php echo esc_url( $sas_frontend . '/privacy' ); ?>" target="_blank" rel="noopener noreferrer"><?php esc_html_e( 'Privacy Policy', 'social-auto-scheduler' ); ?></a>
+				&nbsp;|&nbsp;
+				<a href="<?php echo esc_url( $sas_frontend . '/terms' ); ?>" target="_blank" rel="noopener noreferrer"><?php esc_html_e( 'Terms of Service', 'social-auto-scheduler' ); ?></a>
+				&nbsp;|&nbsp;
+				<a href="<?php echo esc_url( $sas_frontend . '/data-deletion' ); ?>" target="_blank" rel="noopener noreferrer"><?php esc_html_e( 'Data Deletion Instructions', 'social-auto-scheduler' ); ?></a>
+			</p>
+		</div>
+	</div>
 </div>

@@ -22,6 +22,14 @@ class SAS_Scheduler_Service {
      *    another video on the same platform on the same day.
      *  - If today's slots are all past or full, search forward day by day.
      */
+    /**
+     * Hard bound on how many days forward we'll search. Without this, a
+     * misconfigured account (all weekdays unchecked, or uploads_per_day
+     * saved as 0 via a direct REST call that bypasses the HTML min="1")
+     * makes get_next_available_date() loop forever and hang the PHP worker.
+     */
+    private const MAX_SEARCH_DAYS = 365;
+
     public function get_next_available_date($user_id = null, string $platform = ''): DateTime {
         if (is_null($user_id)) {
             $user_id = get_current_user_id();
@@ -29,18 +37,23 @@ class SAS_Scheduler_Service {
 
         $upload_times    = $this->get_upload_times($user_id);
         $uploads_per_day = min(
-            (int) $this->settings_service->get('uploads_per_day', $user_id, 1),
+            max(1, (int) $this->settings_service->get('uploads_per_day', $user_id, 1)),
             count($upload_times)
         );
         $weekdays = $this->settings_service->get(
             'weekdays', $user_id, ['mon','tue','wed','thu','fri','sat','sun']
         );
+        if (!is_array($weekdays) || empty($weekdays)) {
+            // No active days configured — fall back to every day rather than
+            // hanging forever with zero valid days to schedule into.
+            $weekdays = ['mon','tue','wed','thu','fri','sat','sun'];
+        }
 
         $timezone_obj = wp_timezone();
         $now          = new DateTime('now', $timezone_obj);
         $search_from  = (clone $now)->setTime(0, 0, 0);
 
-        while (true) {
+        for ($day = 0; $day < self::MAX_SEARCH_DAYS; $day++) {
             if ($this->is_valid_weekday($search_from, $weekdays)) {
                 $taken_times = $this->get_scheduled_times_for_day($search_from, $user_id, $platform);
 
@@ -58,6 +71,13 @@ class SAS_Scheduler_Service {
             }
             $search_from->modify('+1 day');
         }
+
+        // Should be unreachable now that $weekdays and $uploads_per_day are
+        // always sane, but never hang the request even if some future change
+        // reintroduces an all-slots-full scenario.
+        throw new RuntimeException(
+            __('Could not find an available publish slot within the next year. Check your Schedule Settings.', 'social-auto-scheduler')
+        );
     }
 
     /**

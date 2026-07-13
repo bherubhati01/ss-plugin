@@ -1,7 +1,7 @@
 {
     "$schema": "https://getcomposer.org/schema.json",
-    "name": "your-vendor/social-auto-scheduler",
-    "description": "Automatically schedule and publish videos to YouTube and Instagram",
+    "name": "bherubhati01/social-auto-scheduler",
+    "description": "Automatically schedule and publish videos, Reels, and Stories to YouTube and Instagram — powered by the Soulitam dashboard.",
     "type": "wordpress-plugin",
     "license": "GPL-2.0-or-later",
     "require": {

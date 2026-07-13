@@ -163,7 +163,18 @@ class SAS_Installer {
             $wpdb->query("DROP TABLE IF EXISTS $table");
         }
 
+        // Clear license token/status and backend JWTs — uninstalling must not
+        // leave live credentials behind in wp_options.
+        if (class_exists('SAS_License_Manager')) {
+            SAS_License_Manager::clear_all();
+        }
+        if (class_exists('SAS_Backend_Client')) {
+            SAS_Backend_Client::clear_tokens();
+        }
+
         delete_option('sas_version');
+        delete_option('sas_backend_url');
+        delete_option('sas_oauth_debug');
 
         // Clean up temp/video files
         $upload_dir = wp_upload_dir();

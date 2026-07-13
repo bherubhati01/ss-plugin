@@ -47,8 +47,12 @@
             this.init();
             const el = document.createElement('div');
             el.className = `sas-toast sas-toast--${type}`;
-            const icons = { success: '✓', error: '✕', info: 'ℹ' };
-            el.innerHTML = `<span>${icons[type] || ''}</span><span>${msg}</span>`;
+            const icons = { success: 'yes-alt', error: 'dismiss', info: 'info-outline' };
+            const icon = document.createElement('span');
+            icon.className = `dashicons dashicons-${icons[type] || 'info-outline'}`;
+            const text = document.createElement('span');
+            text.textContent = msg;
+            el.append(icon, text);
             this.container.appendChild(el);
             setTimeout(() => {
                 el.style.animation = 'sasToastOut .3s ease forwards';
@@ -65,6 +69,8 @@
     // =========================================================================
     const darkMode = {
         key: 'sas_dark_mode',
+        sunIcon:  '<svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="10" cy="10" r="3.6"/><path d="M10 1.8v2M10 16.2v2M18.2 10h-2M3.8 10h-2M15.5 4.5l-1.4 1.4M5.9 14.1l-1.4 1.4M15.5 15.5l-1.4-1.4M5.9 5.9 4.5 4.5"/></svg>',
+        moonIcon: '<svg viewBox="0 0 20 20" width="16" height="16" fill="currentColor"><path d="M17.3 12.4A7.3 7.3 0 0 1 7.6 2.7a7.8 7.8 0 1 0 9.7 9.7Z"/></svg>',
         init() {
             const saved = localStorage.getItem(this.key);
             if (saved === '1') document.body.classList.add('sas-dark');
@@ -72,14 +78,14 @@
             const btn = document.createElement('button');
             btn.id = 'sas-dark-toggle';
             btn.title = 'Toggle dark mode';
-            btn.textContent = document.body.classList.contains('sas-dark') ? '☀️' : '🌙';
+            btn.innerHTML = document.body.classList.contains('sas-dark') ? this.sunIcon : this.moonIcon;
             btn.addEventListener('click', () => this.toggle(btn));
             document.body.appendChild(btn);
         },
         toggle(btn) {
             const dark = document.body.classList.toggle('sas-dark');
             localStorage.setItem(this.key, dark ? '1' : '0');
-            btn.textContent = dark ? '☀️' : '🌙';
+            btn.innerHTML = dark ? this.sunIcon : this.moonIcon;
         },
     };
 
@@ -92,20 +98,64 @@
     function getSelectedPlatforms(containerEl) {
         const scope = containerEl || document;
         const checked = [...scope.querySelectorAll('.sas-upload-platform:checked')];
-        const platforms = checked.map(cb => cb.value).filter(Boolean);
-        return platforms.length ? platforms : ['youtube'];
+        return checked.map(cb => cb.value).filter(Boolean);
+    }
+
+    /** Read the checked .sas-upload-content-type radio nearest a card ('reel' default) */
+    function getSelectedContentType(cardEl) {
+        const scope = cardEl || document;
+        const checked = scope.querySelector('.sas-upload-content-type:checked');
+        return checked ? checked.value : 'reel';
+    }
+
+    /**
+     * Stories are Instagram-only. When the content-type radios switch to
+     * 'story', lock the platform selector to Instagram (and back when
+     * switching to Reel/Video) so the upload can never target YouTube with
+     * an unsupported post type.
+     */
+    function wireContentTypeLock(cardEl) {
+        const contentTypeRadios = [...cardEl.querySelectorAll('.sas-upload-content-type')];
+        const help              = cardEl.querySelector('[id^="sas-content-type-help"]');
+        const ytToggle          = cardEl.querySelector('.sas-upload-platform[value="youtube"]');
+        const igToggle          = cardEl.querySelector('.sas-upload-platform[value="instagram"]');
+        if (!contentTypeRadios.length || !ytToggle || !igToggle) return;
+
+        let ytWasChecked = ytToggle.checked;
+
+        function apply() {
+            const isStory = getSelectedContentType(cardEl) === 'story';
+            if (help) help.style.display = isStory ? '' : 'none';
+
+            const ytLabel = ytToggle.closest('.sas-platform-toggle');
+            if (isStory) {
+                ytWasChecked = ytToggle.checked;
+                ytToggle.checked = false;
+                ytToggle.disabled = true;
+                if (ytLabel) ytLabel.classList.add('sas-platform-toggle--disabled');
+                igToggle.checked = true;
+            } else {
+                ytToggle.disabled = false;
+                if (ytLabel) ytLabel.classList.remove('sas-platform-toggle--disabled');
+                ytToggle.checked = ytWasChecked;
+            }
+        }
+
+        contentTypeRadios.forEach(r => r.addEventListener('change', apply));
+        apply();
     }
 
     class ChunkedUploader {
-        constructor(file, platforms, accountId, onProgress, onComplete, onError) {
-            this.file       = file;
-            this.platforms  = Array.isArray(platforms) ? platforms : [platforms || 'youtube'];
-            this.accountId  = accountId || 0;
-            this.onProgress = onProgress;
-            this.onComplete = onComplete;
-            this.onError    = onError;
-            this.uploadId   = null;
-            this.cancelled  = false;
+        constructor(file, platforms, contentType, accountId, onProgress, onComplete, onError) {
+            this.file        = file;
+            this.platforms   = Array.isArray(platforms) ? platforms : [platforms || 'youtube'];
+            this.contentType = contentType === 'story' ? 'story' : 'reel';
+            this.accountId   = accountId || 0;
+            this.onProgress  = onProgress;
+            this.onComplete  = onComplete;
+            this.onError     = onError;
+            this.uploadId    = null;
+            this.cancelled   = false;
         }
 
         async start() {
@@ -123,6 +173,7 @@
             const fd = new FormData();
             fd.append('file', this.file);
             this.platforms.forEach(p => fd.append('platforms[]', p));
+            fd.append('content_type', this.contentType);
             fd.append('account_id', this.accountId);
 
             this.onProgress(50);
@@ -136,11 +187,12 @@
             const total = Math.ceil(this.file.size / CHUNK_SIZE);
 
             const { upload_id } = await api.post('/upload/init', {
-                file_name:  this.file.name,
-                file_size:  this.file.size,
-                chunk_size: CHUNK_SIZE,
-                platforms:  this.platforms,
-                account_id: this.accountId,
+                file_name:    this.file.name,
+                file_size:    this.file.size,
+                chunk_size:   CHUNK_SIZE,
+                platforms:    this.platforms,
+                content_type: this.contentType,
+                account_id:   this.accountId,
             });
             this.uploadId = upload_id;
 
@@ -185,6 +237,9 @@
         const list      = document.getElementById(listId);
         if (!area || !fileInput) return;
 
+        const card = selectorEl ? selectorEl.closest('.sas-card') : area.closest('.sas-card');
+        if (card) wireContentTypeLock(card);
+
         area.addEventListener('click', () => fileInput.click());
         fileInput.addEventListener('change', e => handleFiles(e.target.files));
 
@@ -203,17 +258,23 @@
                     toast.error(`${file.name}: only MP4 and MOV allowed`);
                     continue;
                 }
+                const scope = selectorEl || area.closest('.sas-card');
+                const contentType = getSelectedContentType(scope);
                 // Validate at least one platform is selected
-                const platforms = getSelectedPlatforms(selectorEl || area.closest('.sas-card'));
+                const platforms = getSelectedPlatforms(scope);
                 if (!platforms.length) {
-                    toast.error('Please select at least one platform (YouTube or Instagram).');
+                    toast.error(
+                        contentType === 'story'
+                            ? 'Please connect an Instagram account to upload Stories.'
+                            : 'Please select at least one platform (YouTube or Instagram).'
+                    );
                     return;
                 }
-                await uploadFile(file, platforms);
+                await uploadFile(file, platforms, contentType);
             }
         }
 
-        function uploadFile(file, platforms) {
+        function uploadFile(file, platforms, contentType) {
             const platformLabel = platforms.join(' + ');
             const item          = createUploadItem(file.name, file.size, platformLabel);
             if (list) list.appendChild(item.el);
@@ -222,7 +283,7 @@
 
             return new Promise(resolve => {
                 const uploader = new ChunkedUploader(
-                    file, platforms, accountId,
+                    file, platforms, contentType, accountId,
                     pct => item.setProgress(pct),
                     result => {
                         // result.videos = [{id, publish_date}, ...]
@@ -276,11 +337,17 @@
                 bar.style.width = '100%';
                 pct.textContent = '100%';
                 status.className = 'sas-upload-item__status sas-upload-item__status--done';
-                status.textContent = '✓ ' + msg;
+                status.replaceChildren(
+                    Object.assign(document.createElement('span'), { className: 'dashicons dashicons-yes-alt' }),
+                    document.createTextNode(msg),
+                );
             },
             setError(msg)  {
                 status.className = 'sas-upload-item__status sas-upload-item__status--error';
-                status.textContent = '✕ ' + msg;
+                status.replaceChildren(
+                    Object.assign(document.createElement('span'), { className: 'dashicons dashicons-warning' }),
+                    document.createTextNode(msg),
+                );
             },
         };
     }
@@ -375,7 +442,7 @@
                     </tr></thead>
                     <tbody>${videos.map(v => `
                         <tr>
-                            <td><strong>${esc(v.title)}</strong></td>
+                            <td><strong>${esc(v.title)}</strong> ${contentTypeBadge(v.content_type)}</td>
                             <td>${platformBadge(v.platform)}</td>
                             <td>${statusBadge(v.status)}</td>
                             <td>${v.publish_date ? formatDate(v.publish_date) : '<span class="sas-text-muted">—</span>'}</td>
@@ -483,7 +550,7 @@
             tbody.innerHTML = videos.map(v => {
                 const thumb = v.thumbnail_url
                     ? `<img src="${esc(v.thumbnail_url)}" class="sas-table__thumb" alt="" />`
-                    : `<span class="sas-table__no-thumb">🎬</span>`;
+                    : `<span class="sas-table__no-thumb"><span class="dashicons dashicons-format-video"></span></span>`;
                 const date  = v.publish_date ? formatDate(v.publish_date) : '—';
                 const dur   = v.duration    ? formatDuration(Number(v.duration)) : '—';
                 const size  = v.file_size   ? formatBytes(Number(v.file_size))   : '—';
@@ -493,16 +560,16 @@
                 const canPublishNow  = !['published', 'publishing', 'queued'].includes(v.status);
                 const actionBtns = [
                     canSchedule   ? `<button class="sas-btn sas-btn--sm sas-btn--primary sas-schedule-btn" data-id="${esc(v.id)}">Schedule</button>` : '',
-                    canPublishNow ? `<button class="sas-btn sas-btn--sm sas-btn--publish-now sas-publish-now-btn" data-id="${esc(v.id)}" title="Publish immediately">⚡ Now</button>` : '',
+                    canPublishNow ? `<button class="sas-btn sas-btn--sm sas-btn--publish-now sas-publish-now-btn" data-id="${esc(v.id)}" title="Publish immediately"><span class="dashicons dashicons-megaphone"></span> Now</button>` : '',
                     `<button class="sas-btn sas-btn--sm sas-btn--secondary sas-edit-btn" data-video='${JSON.stringify(v).replace(/'/g, "&#39;")}'>Edit</button>`,
-                    `<button class="sas-btn sas-btn--sm sas-btn--ghost sas-delete-btn" data-id="${esc(v.id)}" title="Delete">✕</button>`,
+                    `<button class="sas-btn sas-btn--sm sas-btn--ghost sas-delete-btn" data-id="${esc(v.id)}" title="Delete"><span class="dashicons dashicons-trash"></span></button>`,
                 ].filter(Boolean).join('');
 
                 return `
                 <tr data-id="${esc(v.id)}">
                     <td><input type="checkbox" class="sas-video-check" value="${esc(v.id)}" /></td>
                     <td>${thumb}</td>
-                    <td><strong>${esc(v.title)}</strong></td>
+                    <td><strong>${esc(v.title)}</strong> ${contentTypeBadge(v.content_type)}</td>
                     <td>${platformBadge(v.platform)}</td>
                     <td>${statusBadge(v.status)}</td>
                     <td>${esc(date)}</td>
@@ -629,6 +696,24 @@
             try { tagsStr = JSON.parse(video.tags).join(', '); } catch { tagsStr = video.tags; }
         }
         document.getElementById('sas-edit-tags').value = tagsStr;
+
+        // Stories are Instagram-only and don't support captions/descriptions/
+        // tags at all — editing them here would be silently ignored at
+        // publish time, so disable them instead of implying they do something.
+        const isStory = video.content_type === 'story';
+        ['sas-edit-title', 'sas-edit-description', 'sas-edit-tags'].forEach(id => {
+            document.getElementById(id).disabled = isStory;
+        });
+        let storyNote = document.getElementById('sas-edit-story-note');
+        if (isStory && !storyNote) {
+            storyNote = document.createElement('p');
+            storyNote.id = 'sas-edit-story-note';
+            storyNote.className = 'sas-field__help';
+            storyNote.textContent = 'Stories don’t support captions, descriptions, or tags.';
+            document.getElementById('sas-edit-title').closest('.sas-field')
+                ?.insertAdjacentElement('beforebegin', storyNote);
+        }
+        if (storyNote) storyNote.style.display = isStory ? '' : 'none';
 
         if (video.publish_date) {
             // publish_date is stored in WP local timezone; parse as local (no Z)
@@ -830,13 +915,13 @@
 
             if (ytCard) {
                 ytCard.innerHTML = ytAcc
-                    ? `<span class="sas-account-card__status--connected">✓ Connected: ${esc(ytAcc.account_name)}</span>`
+                    ? `<span class="sas-account-card__status--connected"><span class="dashicons dashicons-yes-alt"></span> Connected: ${esc(ytAcc.account_name)}</span>`
                     : '<span class="sas-text-muted">Not connected</span>';
             }
 
             if (igCard) {
                 igCard.innerHTML = igAcc
-                    ? `<span class="sas-account-card__status--connected">✓ Connected: ${esc(igAcc.account_name)}</span>`
+                    ? `<span class="sas-account-card__status--connected"><span class="dashicons dashicons-yes-alt"></span> Connected: ${esc(igAcc.account_name)}</span>`
                     : '<span class="sas-text-muted">Not connected</span>';
             }
 
@@ -1138,8 +1223,12 @@
     }
 
     function platformBadge(platform) {
-        const icons = { youtube: '▶', instagram: '📸' };
-        return `<span class="sas-platform sas-platform--${esc(platform)}">${esc(icons[platform] || '')} ${esc(platform)}</span>`;
+        return `<span class="sas-platform sas-platform--${esc(platform)}">${esc(platform)}</span>`;
+    }
+
+    function contentTypeBadge(contentType) {
+        if (contentType !== 'story') return '';
+        return `<span class="sas-badge sas-badge--scheduled">${esc('Story')}</span>`;
     }
 
     function reloadCurrentPage() {
@@ -1186,6 +1275,39 @@
     }
 
     // =========================================================================
+    // Support
+    // =========================================================================
+    function initSupport() {
+        document.getElementById('sas-support-form')?.addEventListener('submit', async e => {
+            e.preventDefault();
+
+            const btn = document.getElementById('sas-send-support-btn');
+            btn.disabled    = true;
+            btn.textContent = sasData.strings.saving;
+
+            const data = {
+                name:    document.getElementById('sas-support-name')?.value || '',
+                email:   document.getElementById('sas-support-email')?.value || '',
+                topic:   document.getElementById('sas-support-topic')?.value || '',
+                message: document.getElementById('sas-support-message')?.value || '',
+            };
+
+            try {
+                await api.post('/contact', data);
+                toast.success('Message sent! Our team will get back to you shortly.');
+                e.target.reset();
+                document.getElementById('sas-support-name').value  = data.name;
+                document.getElementById('sas-support-email').value = data.email;
+            } catch (err) {
+                toast.error(sasData.strings.error + ': ' + err.message);
+            } finally {
+                btn.disabled    = false;
+                btn.textContent = 'Send Message';
+            }
+        });
+    }
+
+    // =========================================================================
     // Router – dispatch based on current page
     // =========================================================================
     function init() {
@@ -1198,6 +1320,7 @@
         if (page === 'accounts')  initAccounts();
         if (page === 'settings')  initSettings();
         if (page === 'logs')      initLogs();
+        if (page === 'support')   initSupport();
 
         annotatePlatformToggles();
     }

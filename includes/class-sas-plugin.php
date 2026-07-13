@@ -35,6 +35,7 @@ class SAS_Plugin {
 		add_action( 'admin_enqueue_scripts', [ $admin, 'enqueue_admin_assets' ] );
 		add_action( 'admin_post_sas_activate_license', [ $admin, 'handle_license_activation' ] );
 		add_action( 'admin_post_sas_deactivate_license', [ $admin, 'handle_license_deactivation' ] );
+		add_filter( 'admin_footer_text', [ $admin, 'admin_footer_text_links' ] );
 	}
 
 	private function define_cron_hooks(): void {
