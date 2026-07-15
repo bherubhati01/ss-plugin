@@ -120,6 +120,26 @@ class SAS_License_Manager {
 	}
 
 	/**
+	 * Called by SAS_Backend_Client when a request still comes back 401
+	 * after a token refresh — the definitive sign that the website this
+	 * JWT was scoped to no longer exists server-side (e.g. deleted from
+	 * the dashboard). verify_periodically() would eventually catch this
+	 * too, but only once every 24 h; this flips the cached status
+	 * immediately so the license gate reappears on the very next admin
+	 * page load instead of leaving the plugin looking "active" while
+	 * every real API call silently fails for up to a day.
+	 */
+	public static function mark_invalid( string $message = '' ): void {
+		if ( self::get_status() !== 'active' ) {
+			return;
+		}
+		update_option( self::OPTION_LICENSE_STATUS, 'revoked' );
+		if ( $message ) {
+			set_transient( 'sas_license_error', $message, 60 );
+		}
+	}
+
+	/**
 	 * Periodic re-verification (called by cron every 24 h).
 	 * Silently updates status; does not throw on failure so the site keeps working.
 	 */

@@ -43,20 +43,37 @@ class SAS_Admin {
     // Assets
     // -------------------------------------------------------------------------
 
-    public function enqueue_admin_assets(string $hook): void {
-        $sas_pages = [
-            'toplevel_page_social-auto-scheduler',
-            'auto-scheduler_page_sas-dashboard',
-            'auto-scheduler_page_sas-videos',
-            'auto-scheduler_page_sas-calendar',
-            'auto-scheduler_page_sas-accounts',
-            'auto-scheduler_page_sas-settings',
-            'auto-scheduler_page_sas-logs',
-            'auto-scheduler_page_sas-support',
-            'auto-scheduler_page_sas-license',
+    /**
+     * True on any Soulitam Social admin page. Slug-based (not hook-suffix
+     * based) so it keeps working regardless of the top-level menu title —
+     * see the note in enqueue_admin_assets().
+     */
+    private static function is_sas_admin_page(): bool {
+        $page = isset($_GET['page']) ? sanitize_key(wp_unslash($_GET['page'])) : '';
+        $sas_slugs = [
+            'social-auto-scheduler',
+            'sas-dashboard',
+            'sas-videos',
+            'sas-calendar',
+            'sas-accounts',
+            'sas-settings',
+            'sas-logs',
+            'sas-support',
+            'sas-license',
         ];
+        return in_array($page, $sas_slugs, true);
+    }
 
-        if (!in_array($hook, $sas_pages, true)) {
+    public function enqueue_admin_assets(string $hook): void {
+        // Matching on $_GET['page'] instead of the $hook suffix — WordPress
+        // derives submenu hook suffixes from sanitize_title(menu_title), so
+        // renaming the top-level menu title (e.g. the "Social Auto
+        // Scheduler" → "Soulitam Social" rebrand) silently changes every
+        // submenu's hook suffix too. A hardcoded 'auto-scheduler_page_*'
+        // list here went stale the moment the title changed, and assets
+        // stopped loading on every page except the raw toplevel one. The
+        // page slugs below are never touched by branding changes.
+        if (!self::is_sas_admin_page()) {
             return;
         }
 
@@ -87,20 +104,7 @@ class SAS_Admin {
     // -------------------------------------------------------------------------
 
     public function admin_footer_text_links( string $text ): string {
-        $screen      = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
-        $sas_screens = [
-            'toplevel_page_social-auto-scheduler',
-            'auto-scheduler_page_sas-dashboard',
-            'auto-scheduler_page_sas-videos',
-            'auto-scheduler_page_sas-calendar',
-            'auto-scheduler_page_sas-accounts',
-            'auto-scheduler_page_sas-settings',
-            'auto-scheduler_page_sas-logs',
-            'auto-scheduler_page_sas-support',
-            'auto-scheduler_page_sas-license',
-        ];
-
-        if ( ! $screen || ! in_array( $screen->id, $sas_screens, true ) ) {
+        if ( ! self::is_sas_admin_page() ) {
             return $text;
         }
 

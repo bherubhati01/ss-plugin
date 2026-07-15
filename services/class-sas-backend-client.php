@@ -81,7 +81,7 @@ class SAS_Backend_Client {
 		if ( self::is_unauthorized( $result ) && self::refresh_access_token() ) {
 			$result = self::do_get( $path, $params );
 		}
-		return $result;
+		return self::finalize( $result );
 	}
 
 	private static function do_get( string $path, array $params = [] ) {
@@ -111,7 +111,7 @@ class SAS_Backend_Client {
 		if ( self::is_unauthorized( $result ) && self::refresh_access_token() ) {
 			$result = self::do_post( $path, $body );
 		}
-		return $result;
+		return self::finalize( $result );
 	}
 
 	private static function do_post( string $path, array $body = [] ) {
@@ -138,7 +138,7 @@ class SAS_Backend_Client {
 		if ( self::is_unauthorized( $result ) && self::refresh_access_token() ) {
 			$result = self::do_patch( $path, $body );
 		}
-		return $result;
+		return self::finalize( $result );
 	}
 
 	private static function do_patch( string $path, array $body = [] ) {
@@ -176,7 +176,7 @@ class SAS_Backend_Client {
 		if ( self::is_unauthorized( $result ) && self::refresh_access_token() ) {
 			$result = self::do_delete( $path );
 		}
-		return $result;
+		return self::finalize( $result );
 	}
 
 	private static function do_delete( string $path ) {
@@ -198,6 +198,22 @@ class SAS_Backend_Client {
 		}
 		$data = $result->get_error_data();
 		return is_array( $data ) && (int) ( $data['status'] ?? 0 ) === 401;
+	}
+
+	/**
+	 * Still 401 even after a token refresh attempt means a fresh, valid
+	 * access token was rejected — not an expiry, but the website this JWT
+	 * is scoped to no longer existing server-side (deleted from the
+	 * dashboard). Flip the cached license status so the gate reappears
+	 * immediately instead of waiting for the next 24h verify cron.
+	 */
+	private static function finalize( $result ) {
+		if ( self::is_unauthorized( $result ) && class_exists( 'SAS_License_Manager' ) ) {
+			SAS_License_Manager::mark_invalid(
+				__( 'Your license is no longer active for this website — it may have been removed from your account. Please reactivate.', 'social-auto-scheduler' )
+			);
+		}
+		return $result;
 	}
 
 	/**
