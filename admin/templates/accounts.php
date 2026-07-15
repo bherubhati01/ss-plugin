@@ -15,7 +15,7 @@ $sas_frontend = untrailingslashit( SAS_FRONTEND_URL );
 	</div>
 
 	<div class="sas-notice sas-notice--info">
-		<strong><?php esc_html_e( 'Connecting accounts happens in your Soulitam dashboard.', 'social-auto-scheduler' ); ?></strong>
+		<strong><?php esc_html_e( 'Connecting accounts happens in your Soulitam Social dashboard.', 'social-auto-scheduler' ); ?></strong>
 		<?php esc_html_e( 'Log in to your dashboard, open Social Accounts, and connect YouTube or Instagram to this website. Connected accounts appear here automatically.', 'social-auto-scheduler' ); ?>
 	</div>
 
@@ -67,7 +67,7 @@ $sas_frontend = untrailingslashit( SAS_FRONTEND_URL );
 					printf(
 						/* translators: %s: link to the frontend dashboard */
 						esc_html__( 'Open your %s and log in.', 'social-auto-scheduler' ),
-						'<a href="' . esc_url( $sas_frontend . '/social-accounts' ) . '" target="_blank" rel="noopener noreferrer">' . esc_html__( 'Soulitam dashboard', 'social-auto-scheduler' ) . '</a>'
+						'<a href="' . esc_url( $sas_frontend . '/social-accounts' ) . '" target="_blank" rel="noopener noreferrer">' . esc_html__( 'Soulitam Social dashboard', 'social-auto-scheduler' ) . '</a>'
 					);
 					?>
 				</li>
@@ -85,7 +85,7 @@ $sas_frontend = untrailingslashit( SAS_FRONTEND_URL );
 		</div>
 		<div class="sas-card__body">
 			<p class="sas-field__help">
-				<?php esc_html_e( 'Connecting a YouTube or Instagram account shares limited profile and publishing data with Soulitam. See how it&#8217;s used, or remove it at any time.', 'social-auto-scheduler' ); ?>
+				<?php esc_html_e( 'Connecting a YouTube or Instagram account shares limited profile and publishing data with Soulitam Social. See how it&#8217;s used, or remove it at any time.', 'social-auto-scheduler' ); ?>
 			</p>
 			<p style="margin-top:8px;">
 				<a href="<?php echo esc_url( $sas_frontend . '/privacy' ); ?>" target="_blank" rel="noopener noreferrer"><?php esc_html_e( 'Privacy Policy', 'social-auto-scheduler' ); ?></a>

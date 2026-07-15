@@ -5,7 +5,7 @@ if (!defined('ABSPATH')) {
 ?>
 <div class="sas-wrap" data-page="dashboard">
     <div class="sas-page-header">
-        <h1><?php esc_html_e('Social Auto Scheduler', 'social-auto-scheduler'); ?></h1>
+        <h1><?php esc_html_e('Soulitam Social', 'social-auto-scheduler'); ?></h1>
         <button class="sas-btn sas-btn--primary" id="sas-quick-upload-btn">
             <span class="dashicons dashicons-upload"></span>
             <?php esc_html_e('Upload Videos', 'social-auto-scheduler'); ?>

@@ -1,6 +1,6 @@
 <?php
 /**
- * GitHub Auto-Updater for Social Auto Scheduler
+ * GitHub Auto-Updater for Soulitam Social
  *
  * Uses Plugin Update Checker (by Yahnis Elsts) to pull automatic updates
  * from GitHub Releases.  WordPress compares the installed plugin's Version
@@ -50,7 +50,7 @@ if ( ! $sas_puc_loaded ) {
 	if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 		// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_trigger_error
 		trigger_error(
-			'Social Auto Scheduler: Plugin Update Checker library not found. ' .
+			'Soulitam Social: Plugin Update Checker library not found. ' .
 			'Install it with: git submodule add https://github.com/YahnisElsts/plugin-update-checker.git plugin-update-checker',
 			E_USER_NOTICE
 		);

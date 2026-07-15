@@ -22,7 +22,7 @@ $gate_success = get_transient( 'sas_license_success' ); delete_transient( 'sas_l
 
             <h1 class="sas-gate-title"><?php esc_html_e( 'Activate Your Free License', 'social-auto-scheduler' ); ?></h1>
             <p class="sas-gate-sub">
-                <?php esc_html_e( 'Social Auto Scheduler needs a license key to connect this website. Generate a FREE license key in under a minute — one key per website.', 'social-auto-scheduler' ); ?>
+                <?php esc_html_e( 'Soulitam Social needs a license key to connect this website. Generate a FREE license key in under a minute — one key per website.', 'social-auto-scheduler' ); ?>
             </p>
 
             <?php if ( $gate_error ) : ?>
@@ -272,13 +272,13 @@ $gate_success = get_transient( 'sas_license_success' ); delete_transient( 'sas_l
         padding: 11px 14px;
         border-radius: 10px;
         font-size: 13.5px;
-        color: #fff;
+        color: #fff !important;
         background: rgba(255,255,255,0.06) !important;
         border: 1px solid rgba(255,255,255,0.14) !important;
         outline: none;
         transition: border-color .18s ease;
     }
-    .sas-gate-input::placeholder { color: rgba(255,255,255,0.35); }
+    .sas-gate-input::placeholder { color: rgba(255,255,255,0.35) !important; }
     .sas-gate-input:focus { border-color: rgba(99,102,241,0.6) !important; box-shadow: 0 0 0 3px rgba(99,102,241,0.2); }
     .sas-gate-btn--submit { flex-shrink: 0; }
 

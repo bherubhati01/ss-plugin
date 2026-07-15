@@ -71,7 +71,7 @@ $masked_token = $token ? str_repeat( '•', max( 0, strlen( $token ) - 4 ) ) . s
                 printf(
                     /* translators: %s: link to the licenses page on the frontend website */
                     esc_html__( 'Enter your license key. You can generate a free key from your %s.', 'social-auto-scheduler' ),
-                    '<a href="' . esc_url( $sas_frontend . '/licenses' ) . '" target="_blank" rel="noopener noreferrer" class="sas-link">' . esc_html__( 'Soulitam dashboard', 'social-auto-scheduler' ) . '</a>'
+                    '<a href="' . esc_url( $sas_frontend . '/licenses' ) . '" target="_blank" rel="noopener noreferrer" class="sas-link">' . esc_html__( 'Soulitam Social dashboard', 'social-auto-scheduler' ) . '</a>'
                 );
                 ?>
             </p>

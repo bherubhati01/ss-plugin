@@ -11,8 +11,8 @@ class SAS_Admin {
 
     public function add_admin_menu(): void {
         add_menu_page(
-            __('Social Auto Scheduler', 'social-auto-scheduler'),
-            __('Auto Scheduler', 'social-auto-scheduler'),
+            __('Soulitam Social', 'social-auto-scheduler'),
+            __('Soulitam Social', 'social-auto-scheduler'),
             'manage_options',
             'social-auto-scheduler',
             [$this, 'render_dashboard'],
@@ -116,7 +116,7 @@ class SAS_Admin {
             $rendered[] = '<a href="' . esc_url( $url ) . '" target="_blank" rel="noopener noreferrer">' . esc_html( $label ) . '</a>';
         }
 
-        return 'Social Auto Scheduler &nbsp;&middot;&nbsp; ' . implode( ' &nbsp;|&nbsp; ', $rendered );
+        return 'Soulitam Social &nbsp;&middot;&nbsp; ' . implode( ' &nbsp;|&nbsp; ', $rendered );
     }
 
     // -------------------------------------------------------------------------

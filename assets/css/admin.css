@@ -1,5 +1,5 @@
 /* ============================================================
-   Social Auto Scheduler – Admin CSS
+   Soulitam Social – Admin CSS
    Refined light admin (Untitled-UI-inspired), brand-matched
    indigo accent, dark mode via .sas-dark toggle.
    ============================================================ */
@@ -324,11 +324,17 @@ body.sas-dark {
     padding: 8px 12px;
     border: 1px solid var(--sas-border);
     border-radius: var(--sas-radius-sm);
-    background: var(--sas-surface);
-    color: var(--sas-text);
+    background: var(--sas-surface) !important;
+    color: var(--sas-text) !important;
     font-size: 13px;
     transition: border-color .15s, box-shadow .15s;
     box-sizing: border-box;
+}
+
+.sas-input::placeholder,
+.sas-select::placeholder,
+.sas-textarea::placeholder {
+    color: var(--sas-text-muted) !important;
 }
 
 .sas-input:focus,
@@ -344,8 +350,8 @@ body.sas-dark {
 .sas-input:disabled,
 .sas-select:disabled,
 .sas-textarea:disabled {
-    background: var(--sas-surface-2);
-    color: var(--sas-text-muted);
+    background: var(--sas-surface-2) !important;
+    color: var(--sas-text-muted) !important;
     cursor: not-allowed;
 }
 
