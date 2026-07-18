@@ -1079,7 +1079,9 @@ body.sas-dark {
 .sas-modal__backdrop {
     position: absolute;
     inset: 0;
-    background: rgba(16,24,40,.55);
+    background: rgba(16,24,40,.6);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
     animation: sasBackdropIn .2s ease;
 }
 
