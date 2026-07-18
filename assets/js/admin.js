@@ -1222,8 +1222,14 @@
         return `<span class="sas-badge sas-badge--${esc(status)}">${esc(labels[status] || status)}</span>`;
     }
 
+    const PLATFORM_ICONS = { youtube: 'youtube.svg', instagram: 'instagram.svg' };
+
     function platformBadge(platform) {
-        return `<span class="sas-platform sas-platform--${esc(platform)}">${esc(platform)}</span>`;
+        const icon = PLATFORM_ICONS[platform];
+        const img = icon
+            ? `<img src="${sasData.pluginUrl}assets/images/${icon}" width="12" height="12" alt="" class="sas-platform__icon">`
+            : '';
+        return `<span class="sas-platform sas-platform--${esc(platform)}">${img}${esc(platform)}</span>`;
     }
 
     function contentTypeBadge(contentType) {

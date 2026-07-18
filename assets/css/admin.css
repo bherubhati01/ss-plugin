@@ -749,13 +749,10 @@ body.sas-dark {
     text-transform: capitalize;
 }
 
-.sas-platform::before {
-    content: '';
+.sas-platform__icon {
     display: inline-block;
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: currentColor;
+    object-fit: contain;
+    flex-shrink: 0;
 }
 
 .sas-platform--youtube  { color: #FF0000; }
