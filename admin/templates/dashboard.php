@@ -46,6 +46,16 @@ if (!defined('ABSPATH')) {
         </div>
     </div>
 
+    <!-- Announcements -->
+    <div class="sas-card">
+        <div class="sas-card__header">
+            <h2><?php esc_html_e('Announcements', 'social-auto-scheduler'); ?></h2>
+        </div>
+        <div class="sas-card__body" id="sas-notifications">
+            <div class="sas-loading-skeleton"></div>
+        </div>
+    </div>
+
     <!-- Next Upload Countdown -->
     <div class="sas-row">
         <div class="sas-card sas-card--half">

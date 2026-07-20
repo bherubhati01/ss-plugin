@@ -59,6 +59,11 @@ class SAS_API {
             ['methods' => 'POST', 'callback' => [$this, 'save_settings'], 'permission_callback' => [$this, 'auth']],
         ]);
 
+        // --- Notifications ---
+        register_rest_route($ns, '/notifications', [
+            ['methods' => 'GET', 'callback' => [$this, 'get_notifications'], 'permission_callback' => [$this, 'auth']],
+        ]);
+
         // --- Accounts ---
         register_rest_route($ns, '/accounts', [
             ['methods' => 'GET', 'callback' => [$this, 'get_accounts'], 'permission_callback' => [$this, 'auth']],
@@ -464,6 +469,34 @@ class SAS_API {
             'storage_bytes'  => 0,
             'storage_human'  => __('N/A (hosted on your server)', 'social-auto-scheduler'),
         ], 200);
+    }
+
+    // =========================================================================
+    // Notifications
+    // =========================================================================
+
+    /**
+     * Announcements the backend admin has broadcast to this website's
+     * owning user, flagged show_on_plugin — same underlying Notification
+     * rows the dashboard sees, filtered to a different flag.
+     */
+    public function get_notifications(): WP_REST_Response|WP_Error {
+        $result = SAS_Backend_Client::get('/api/v1/notifications/plugin/', ['page_size' => 10]);
+        if (is_wp_error($result)) {
+            return $result;
+        }
+
+        $items = array_map(static function ($n) {
+            return [
+                'id'         => $n['id'] ?? 0,
+                'type'       => $n['type'] ?? 'info',
+                'title'      => $n['title'] ?? '',
+                'message'    => $n['message'] ?? '',
+                'created_at' => $n['created_at'] ?? '',
+            ];
+        }, $result['results'] ?? []);
+
+        return new WP_REST_Response($items, 200);
     }
 
     public function get_calendar(WP_REST_Request $request): WP_REST_Response|WP_Error {

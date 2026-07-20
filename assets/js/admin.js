@@ -455,6 +455,31 @@
         }
     }
 
+    async function loadNotifications() {
+        const el = document.getElementById('sas-notifications');
+        if (!el) return;
+
+        try {
+            const notifications = await api.get('/notifications');
+            if (!notifications.length) {
+                el.innerHTML = '<p class="sas-empty">No announcements right now.</p>';
+                return;
+            }
+            const typeClass = { info: 'info', success: 'success', warning: 'warning', error: 'error' };
+            el.innerHTML = `
+                <ul class="sas-notification-list">${notifications.map(n => `
+                    <li class="sas-notification sas-notification--${typeClass[n.type] || 'info'}">
+                        <div class="sas-notification__title">${esc(n.title)}</div>
+                        ${n.message ? `<div class="sas-notification__message">${esc(n.message)}</div>` : ''}
+                        <div class="sas-notification__date">${formatDate(n.created_at)}</div>
+                    </li>
+                `).join('')}</ul>
+            `;
+        } catch (e) {
+            el.innerHTML = '<p class="sas-empty">Unable to load announcements.</p>';
+        }
+    }
+
     // =========================================================================
     // Videos page
     // =========================================================================
@@ -1239,7 +1264,7 @@
 
     function reloadCurrentPage() {
         const page = document.querySelector('[data-page]')?.dataset.page;
-        if (page === 'dashboard') { loadStats(); loadNextUpload(); loadRecentVideos(); }
+        if (page === 'dashboard') { loadStats(); loadNextUpload(); loadRecentVideos(); loadNotifications(); }
         if (page === 'videos')    loadVideos();
     }
 

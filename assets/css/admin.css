@@ -1279,3 +1279,13 @@ body.sas-dark {
 .sas-text-muted { color: var(--sas-text-muted); font-size: 12px; }
 .sas-mt-0 { margin-top: 0 !important; }
 .sas-empty { color: var(--sas-text-muted); text-align: center; padding: 40px; font-size: 13px; }
+
+/* Announcements — admin-broadcast notifications on the Dashboard page */
+.sas-notification-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.sas-notification { border-left: 3px solid var(--sas-info); background: var(--sas-info-bg); border-radius: 4px; padding: 10px 12px; }
+.sas-notification--success { border-left-color: var(--sas-success); background: var(--sas-success-bg); }
+.sas-notification--warning { border-left-color: var(--sas-warning); background: var(--sas-warning-bg); }
+.sas-notification--error   { border-left-color: var(--sas-danger);  background: var(--sas-danger-bg); }
+.sas-notification__title { font-weight: 600; font-size: 13px; }
+.sas-notification__message { font-size: 12px; color: var(--sas-text-muted); margin-top: 2px; }
+.sas-notification__date { font-size: 11px; color: var(--sas-text-muted); margin-top: 4px; }
