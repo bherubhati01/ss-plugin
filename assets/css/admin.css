@@ -1288,4 +1288,5 @@ body.sas-dark {
 .sas-notification--error   { border-left-color: var(--sas-danger);  background: var(--sas-danger-bg); }
 .sas-notification__title { font-weight: 600; font-size: 13px; }
 .sas-notification__message { font-size: 12px; color: var(--sas-text-muted); margin-top: 2px; }
+.sas-notification__image { display: block; max-height: 180px; border-radius: 4px; margin-top: 8px; object-fit: cover; }
 .sas-notification__date { font-size: 11px; color: var(--sas-text-muted); margin-top: 4px; }

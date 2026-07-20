@@ -492,6 +492,7 @@ class SAS_API {
                 'type'       => $n['type'] ?? 'info',
                 'title'      => $n['title'] ?? '',
                 'message'    => $n['message'] ?? '',
+                'image_url'  => $n['image_url'] ?? null,
                 'created_at' => $n['created_at'] ?? '',
             ];
         }, $result['results'] ?? []);

@@ -471,6 +471,7 @@
                     <li class="sas-notification sas-notification--${typeClass[n.type] || 'info'}">
                         <div class="sas-notification__title">${esc(n.title)}</div>
                         ${n.message ? `<div class="sas-notification__message">${esc(n.message)}</div>` : ''}
+                        ${n.image_url ? `<img src="${esc(n.image_url)}" alt="" class="sas-notification__image">` : ''}
                         <div class="sas-notification__date">${formatDate(n.created_at)}</div>
                     </li>
                 `).join('')}</ul>
