@@ -320,7 +320,7 @@ class SAS_Upload_Service {
 			'content_type'     => $content_type,
 			'platforms'        => $platforms ?: [ 'story' === $content_type ? 'instagram' : 'youtube' ],
 			'scheduled_at'     => $meta['scheduled_at'] ?? null,
-			// So the backend knows to offer this video for the 72h-after-publish
+			// So the backend knows to offer this video for the 48h-after-publish
 			// Media Library cleanup sweep — see cron/class-sas-cron.php.
 			'wp_attachment_id' => isset( $meta['wp_attachment_id'] ) ? (int) $meta['wp_attachment_id'] : null,
 		];
