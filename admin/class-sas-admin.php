@@ -16,7 +16,7 @@ class SAS_Admin {
             'manage_options',
             'social-auto-scheduler',
             [$this, 'render_dashboard'],
-            'dashicons-schedule',
+            esc_url( SAS_PLUGIN_URL . 'assets/images/sas-logo.png' ),
             30
         );
 
