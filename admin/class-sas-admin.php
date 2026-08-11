@@ -11,12 +11,12 @@ class SAS_Admin {
 
     public function add_admin_menu(): void {
         add_menu_page(
-            __('Soulitam Social', 'social-auto-scheduler'),
-            __('Soulitam Social', 'social-auto-scheduler'),
+            __('Meavr', 'social-auto-scheduler'),
+            __('Meavr', 'social-auto-scheduler'),
             'manage_options',
             'social-auto-scheduler',
             [$this, 'render_dashboard'],
-            esc_url( SAS_PLUGIN_URL . 'assets/images/sas-logo.png' ),
+            esc_url( SAS_PLUGIN_URL . 'assets/images/meavr-logo.png' ),
             30
         );
 
@@ -44,7 +44,7 @@ class SAS_Admin {
     // -------------------------------------------------------------------------
 
     /**
-     * True on any Soulitam Social admin page. Slug-based (not hook-suffix
+     * True on any Meavr admin page. Slug-based (not hook-suffix
      * based) so it keeps working regardless of the top-level menu title —
      * see the note in enqueue_admin_assets().
      */
@@ -68,7 +68,7 @@ class SAS_Admin {
         // Matching on $_GET['page'] instead of the $hook suffix — WordPress
         // derives submenu hook suffixes from sanitize_title(menu_title), so
         // renaming the top-level menu title (e.g. the "Social Auto
-        // Scheduler" → "Soulitam Social" rebrand) silently changes every
+        // Scheduler" → "Meavr" rebrand) silently changes every
         // submenu's hook suffix too. A hardcoded 'auto-scheduler_page_*'
         // list here went stale the moment the title changed, and assets
         // stopped loading on every page except the raw toplevel one. The
@@ -77,7 +77,13 @@ class SAS_Admin {
             return;
         }
 
-        wp_enqueue_style('sas-admin-css', SAS_PLUGIN_URL . 'assets/css/admin.css', [], SAS_VERSION);
+        wp_register_style(
+            'sas-fonts',
+            'https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap',
+            [],
+            null
+        );
+        wp_enqueue_style('sas-admin-css', SAS_PLUGIN_URL . 'assets/css/admin.css', ['sas-fonts'], SAS_VERSION);
         wp_enqueue_script('sas-admin-js', SAS_PLUGIN_URL . 'assets/js/admin.js', [], SAS_VERSION, true);
 
         wp_localize_script('sas-admin-js', 'sasData', [
@@ -120,7 +126,7 @@ class SAS_Admin {
             $rendered[] = '<a href="' . esc_url( $url ) . '" target="_blank" rel="noopener noreferrer">' . esc_html( $label ) . '</a>';
         }
 
-        return 'Soulitam Social &nbsp;&middot;&nbsp; ' . implode( ' &nbsp;|&nbsp; ', $rendered );
+        return 'Meavr &nbsp;&middot;&nbsp; ' . implode( ' &nbsp;|&nbsp; ', $rendered );
     }
 
     // -------------------------------------------------------------------------

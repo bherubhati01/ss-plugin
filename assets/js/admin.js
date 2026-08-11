@@ -1297,7 +1297,7 @@
                     if (label) {
                         label.style.opacity = '.5';
                         label.style.cursor  = 'not-allowed';
-                        label.title = 'Not connected — connect this account from your Soulitam Social dashboard (Social Accounts).';
+                        label.title = 'Not connected — connect this account from your Meavr dashboard (Social Accounts).';
                     }
                 }
             });

@@ -1,11 +1,11 @@
 <?php
 /**
- * Plugin Name: Soulitam Social
- * Plugin URI: https://soulitam.com
- * Description: Automatically schedule and publish videos, Reels, and Stories to YouTube and Instagram — powered by the Soulitam Social dashboard.
- * Version: 1.1.11
- * Author: Soulitam Social
- * Author URI: https://soulitam.com
+ * Plugin Name: Meavr
+ * Plugin URI: https://meavr.com
+ * Description: Automatically schedule and publish videos, Reels, and Stories to YouTube and Instagram — powered by the Meavr dashboard.
+ * Version: 1.1.13
+ * Author: Meavr
+ * Author URI: https://meavr.com
  * License: GPL v2 or later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain: social-auto-scheduler
@@ -18,20 +18,20 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('SAS_VERSION', '1.1.11');
+define('SAS_VERSION', '1.1.13');
 define('SAS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SAS_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('SAS_PLUGIN_BASENAME', plugin_basename(__FILE__));
 
 // Default backend URL — can be overridden via wp-config.php:
-//   define('SAS_BACKEND_URL', 'https://api.soulitam.com');
+//   define('SAS_BACKEND_URL', 'https://api.meavr.com');
 if (!defined('SAS_BACKEND_URL')) {
-    define('SAS_BACKEND_URL', 'https://api.soulitam.com');
+    define('SAS_BACKEND_URL', 'https://api.meavr.com');
 }
 
 // Frontend website (user dashboard) — where users sign up and generate license keys.
 if (!defined('SAS_FRONTEND_URL')) {
-    define('SAS_FRONTEND_URL', 'https://soulitam.com');
+    define('SAS_FRONTEND_URL', 'https://meavr.com');
 }
 
 require_once SAS_PLUGIN_DIR . 'includes/class-sas-autoloader.php';

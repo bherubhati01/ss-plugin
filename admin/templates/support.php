@@ -64,7 +64,7 @@ $current_user  = wp_get_current_user();
         <?php
         printf(
             /* translators: %s: link to the frontend contact page */
-            esc_html__( 'Prefer email? Reach us directly at support@soulitam.com or visit %s.', 'social-auto-scheduler' ),
+            esc_html__( 'Prefer email? Reach us directly at support@meavr.com or visit %s.', 'social-auto-scheduler' ),
             '<a href="' . esc_url( $sas_frontend . '/contact' ) . '" target="_blank" rel="noopener noreferrer">' . esc_html__( 'our Contact page', 'social-auto-scheduler' ) . '</a>'
         );
         ?>

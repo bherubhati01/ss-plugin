@@ -22,7 +22,7 @@ $gate_success = get_transient( 'sas_license_success' ); delete_transient( 'sas_l
 
             <h1 class="sas-gate-title"><?php esc_html_e( 'Activate Your Free License', 'social-auto-scheduler' ); ?></h1>
             <p class="sas-gate-sub">
-                <?php esc_html_e( 'Soulitam Social needs a license key to connect this website. Generate a FREE license key in under a minute — one key per website.', 'social-auto-scheduler' ); ?>
+                <?php esc_html_e( 'Meavr needs a license key to connect this website. Generate a FREE license key in under a minute — one key per website.', 'social-auto-scheduler' ); ?>
             </p>
 
             <?php if ( $gate_error ) : ?>
@@ -92,7 +92,7 @@ $gate_success = get_transient( 'sas_license_success' ); delete_transient( 'sas_l
                 printf(
                     /* translators: %s: link to the frontend website */
                     esc_html__( 'Need help? Visit %s for guides and support.', 'social-auto-scheduler' ),
-                    '<a href="' . esc_url( $sas_frontend ) . '" target="_blank" rel="noopener noreferrer">soulitam.com</a>'
+                    '<a href="' . esc_url( $sas_frontend ) . '" target="_blank" rel="noopener noreferrer">meavr.com</a>'
                 );
                 ?>
             </p>
@@ -105,6 +105,11 @@ $gate_success = get_transient( 'sas_license_success' ); delete_transient( 'sas_l
      * Cover only the content area — keep the WP admin bar (top, 32px) and
      * admin menu (left, 160px / 36px folded) visible and clickable.
      * z-index stays below #adminmenuwrap (9990) and #wpadminbar (99999).
+     *
+     * Uses the same --sas-* tokens as admin.css (incl. body.sas-dark
+     * overrides) instead of an independent hardcoded palette, so this gate
+     * follows the light/dark toggle and MEAVR brand colors like every
+     * other screen — no separate glassmorphism theme.
      */
     .sas-gate-overlay {
         position: fixed;
@@ -117,10 +122,7 @@ $gate_success = get_transient( 'sas_license_success' ); delete_transient( 'sas_l
         align-items: center;
         justify-content: center;
         padding: 24px;
-        background: radial-gradient(ellipse 80% 60% at 50% -10%, rgba(99,102,241,0.25), transparent),
-                    rgba(8, 10, 24, 0.92);
-        backdrop-filter: blur(8px);
-        -webkit-backdrop-filter: blur(8px);
+        background: rgba(13, 11, 18, 0.6);
         overflow-y: auto;
     }
     /* Collapsed admin menu */
@@ -138,24 +140,21 @@ $gate_success = get_transient( 'sas_license_success' ); delete_transient( 'sas_l
         max-width: 560px;
         margin: auto;
         padding: 40px 44px;
-        border-radius: 20px;
-        background: rgba(255, 255, 255, 0.05);
-        border: 1px solid rgba(255, 255, 255, 0.10);
-        box-shadow: 0 32px 80px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.08);
-        backdrop-filter: blur(24px);
-        -webkit-backdrop-filter: blur(24px);
+        border-radius: var(--sas-radius-lg);
+        background: var(--sas-surface);
+        border: 1px solid var(--sas-border);
+        box-shadow: var(--sas-shadow-lg);
         text-align: center;
-        color: #e5e7eb;
+        color: var(--sas-text);
     }
     .sas-gate-icon {
         width: 64px; height: 64px;
         margin: 0 auto 18px;
         display: flex; align-items: center; justify-content: center;
-        border-radius: 16px;
-        background: rgba(99,102,241,0.15);
-        border: 1px solid rgba(99,102,241,0.35);
-        box-shadow: 0 0 32px rgba(99,102,241,0.35);
-        color: #a5b4fc;
+        border-radius: var(--sas-radius);
+        background: var(--sas-primary-light);
+        border: 1px solid var(--sas-primary);
+        color: var(--sas-primary);
     }
     .sas-gate-icon .dashicons {
         font-size: 28px;
@@ -166,7 +165,7 @@ $gate_success = get_transient( 'sas_license_success' ); delete_transient( 'sas_l
         margin: 0 0 10px;
         font-size: 26px;
         font-weight: 800;
-        color: #fff;
+        color: var(--sas-text);
         letter-spacing: -0.02em;
     }
     .sas-gate-sub {
@@ -174,17 +173,17 @@ $gate_success = get_transient( 'sas_license_success' ); delete_transient( 'sas_l
         max-width: 420px;
         font-size: 14px;
         line-height: 1.6;
-        color: rgba(255,255,255,0.55);
+        color: var(--sas-text-muted);
     }
     .sas-gate-notice {
         margin: 0 0 18px;
         padding: 10px 14px;
-        border-radius: 10px;
+        border-radius: var(--sas-radius-sm);
         font-size: 13px;
         text-align: left;
     }
-    .sas-gate-notice--error   { background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.35); color: #fca5a5; }
-    .sas-gate-notice--success { background: rgba(34,197,94,0.12); border: 1px solid rgba(34,197,94,0.35); color: #86efac; }
+    .sas-gate-notice--error   { background: var(--sas-danger-bg); border: 1px solid var(--sas-danger); color: var(--sas-danger-text); }
+    .sas-gate-notice--success { background: var(--sas-success-bg); border: 1px solid var(--sas-success); color: var(--sas-success-text); }
 
     .sas-gate-steps {
         display: flex;
@@ -198,9 +197,9 @@ $gate_success = get_transient( 'sas_license_success' ); delete_transient( 'sas_l
         gap: 14px;
         align-items: flex-start;
         padding: 12px 16px;
-        border-radius: 12px;
-        background: rgba(255,255,255,0.04);
-        border: 1px solid rgba(255,255,255,0.07);
+        border-radius: var(--sas-radius);
+        background: var(--sas-surface-2);
+        border: 1px solid var(--sas-border);
     }
     .sas-gate-step-num {
         flex-shrink: 0;
@@ -208,12 +207,12 @@ $gate_success = get_transient( 'sas_license_success' ); delete_transient( 'sas_l
         display: flex; align-items: center; justify-content: center;
         border-radius: 50%;
         font-size: 12px; font-weight: 700;
-        color: #c7d2fe;
-        background: rgba(99,102,241,0.18);
-        border: 1px solid rgba(99,102,241,0.4);
+        color: var(--sas-primary);
+        background: var(--sas-primary-light);
+        border: 1px solid var(--sas-primary);
     }
-    .sas-gate-step strong { display: block; color: #fff; font-size: 13.5px; margin-bottom: 2px; }
-    .sas-gate-step p { margin: 0; font-size: 12.5px; color: rgba(255,255,255,0.5); line-height: 1.5; }
+    .sas-gate-step strong { display: block; color: var(--sas-text); font-size: 13.5px; margin-bottom: 2px; }
+    .sas-gate-step p { margin: 0; font-size: 12.5px; color: var(--sas-text-muted); line-height: 1.5; }
 
     .sas-gate-actions {
         display: flex;
@@ -227,33 +226,33 @@ $gate_success = get_transient( 'sas_license_success' ); delete_transient( 'sas_l
         align-items: center;
         gap: 6px;
         padding: 10px 18px;
-        border-radius: 10px;
+        border-radius: var(--sas-radius);
         font-size: 13.5px;
         font-weight: 600;
         text-decoration: none;
         cursor: pointer;
         border: 1px solid transparent;
-        transition: all .18s ease;
+        transition: var(--sas-transition);
     }
     .sas-gate-btn--primary {
-        background: #6366f1;
+        background: var(--sas-primary);
         color: #fff !important;
-        box-shadow: 0 0 20px rgba(99,102,241,0.45);
+        box-shadow: var(--sas-shadow);
     }
-    .sas-gate-btn--primary:hover { background: #575af0; box-shadow: 0 0 30px rgba(99,102,241,0.6); color: #fff; }
+    .sas-gate-btn--primary:hover { background: var(--sas-primary-dark); color: #fff; }
     .sas-gate-btn--ghost {
-        background: rgba(255,255,255,0.05);
-        border-color: rgba(255,255,255,0.12);
-        color: rgba(255,255,255,0.85) !important;
+        background: var(--sas-surface-2);
+        border-color: var(--sas-border);
+        color: var(--sas-text) !important;
     }
-    .sas-gate-btn--ghost:hover { background: rgba(255,255,255,0.1); color: #fff; }
+    .sas-gate-btn--ghost:hover { background: var(--sas-border); }
 
     .sas-gate-divider {
         display: flex;
         align-items: center;
         gap: 12px;
         margin: 20px 0;
-        color: rgba(255,255,255,0.35);
+        color: var(--sas-text-muted);
         font-size: 11px;
         text-transform: uppercase;
         letter-spacing: 0.12em;
@@ -263,27 +262,27 @@ $gate_success = get_transient( 'sas_license_success' ); delete_transient( 'sas_l
         content: '';
         flex: 1;
         height: 1px;
-        background: rgba(255,255,255,0.1);
+        background: var(--sas-border);
     }
 
     .sas-gate-form { display: flex; gap: 10px; }
     .sas-gate-input {
         flex: 1;
         padding: 11px 14px;
-        border-radius: 10px;
+        border-radius: var(--sas-radius);
         font-size: 13.5px;
-        color: #fff !important;
-        background: rgba(255,255,255,0.06) !important;
-        border: 1px solid rgba(255,255,255,0.14) !important;
+        color: var(--sas-text) !important;
+        background: var(--sas-surface) !important;
+        border: 1px solid var(--sas-border) !important;
         outline: none;
         transition: border-color .18s ease;
     }
-    .sas-gate-input::placeholder { color: rgba(255,255,255,0.35) !important; }
-    .sas-gate-input:focus { border-color: rgba(99,102,241,0.6) !important; box-shadow: 0 0 0 3px rgba(99,102,241,0.2); }
+    .sas-gate-input::placeholder { color: var(--sas-text-muted) !important; }
+    .sas-gate-input:focus { border-color: var(--sas-border-focus) !important; box-shadow: 0 0 0 3px var(--sas-primary-light); }
     .sas-gate-btn--submit { flex-shrink: 0; }
 
-    .sas-gate-foot { margin: 18px 0 0; font-size: 12px; color: rgba(255,255,255,0.4); }
-    .sas-gate-foot a { color: #a5b4fc; text-decoration: none; }
+    .sas-gate-foot { margin: 18px 0 0; font-size: 12px; color: var(--sas-text-muted); }
+    .sas-gate-foot a { color: var(--sas-primary); text-decoration: none; }
     .sas-gate-foot a:hover { text-decoration: underline; }
 
     @media (max-width: 600px) {
