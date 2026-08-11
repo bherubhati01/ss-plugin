@@ -16,7 +16,10 @@ class SAS_Admin {
             'manage_options',
             'social-auto-scheduler',
             [$this, 'render_dashboard'],
-            esc_url( SAS_PLUGIN_URL . 'assets/images/meavr-logo.png' ),
+            // ?ver=SAS_VERSION busts the browser/proxy cache automatically
+            // whenever the plugin version bumps, same as the enqueued CSS/JS
+            // below — no manual cache purge needed when the logo changes.
+            esc_url( SAS_PLUGIN_URL . 'assets/images/meavr-logo.png?ver=' . SAS_VERSION ),
             30
         );
 
