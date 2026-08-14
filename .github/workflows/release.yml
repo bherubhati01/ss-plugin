@@ -65,6 +65,12 @@ jobs:
             ./ "build/$PLUGIN_DIR/"
           cd build
           zip -r "../social-auto-scheduler-${{ steps.ver.outputs.version }}.zip" "$PLUGIN_DIR"
+          cd ..
+          # Fixed-name copy so the website's download button (an evergreen
+          # /releases/latest/download/... URL) always resolves to whatever
+          # was most recently released, without the frontend needing to
+          # know the current version number.
+          cp "social-auto-scheduler-${{ steps.ver.outputs.version }}.zip" "social-auto-scheduler-latest.zip"
 
       - name: Tag this release commit
         if: steps.check.outputs.skip == 'false'
@@ -79,4 +85,6 @@ jobs:
           tag_name: ${{ steps.ver.outputs.tag }}
           name: ${{ steps.ver.outputs.tag }}
           generate_release_notes: true
-          files: social-auto-scheduler-${{ steps.ver.outputs.version }}.zip
+          files: |
+            social-auto-scheduler-${{ steps.ver.outputs.version }}.zip
+            social-auto-scheduler-latest.zip

@@ -3,7 +3,7 @@
  * Plugin Name: Meavr
  * Plugin URI: https://meavr.com
  * Description: Automatically schedule and publish videos, Reels, and Stories to YouTube and Instagram — powered by the Meavr dashboard.
- * Version: 1.1.13
+ * Version: 1.1.14
  * Author: Meavr
  * Author URI: https://meavr.com
  * License: GPL v2 or later
@@ -18,7 +18,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('SAS_VERSION', '1.1.13');
+define('SAS_VERSION', '1.1.14');
 define('SAS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SAS_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('SAS_PLUGIN_BASENAME', plugin_basename(__FILE__));

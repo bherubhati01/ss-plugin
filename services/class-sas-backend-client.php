@@ -264,13 +264,53 @@ class SAS_Backend_Client {
 		}
 
 		$code = (int) wp_remote_retrieve_response_code( $response );
-		$body = json_decode( wp_remote_retrieve_body( $response ), true );
+		$raw_body = wp_remote_retrieve_body( $response );
+		$body = json_decode( $raw_body, true );
 
 		if ( $code >= 400 ) {
-			$message = $body['error']['message'] ?? "HTTP {$code} error from backend {$method} {$path}";
+			$message = self::extract_error_message( $body, $code, $raw_body );
 			return new WP_Error( 'backend_error', $message, [ 'status' => $code, 'body' => $body ] );
 		}
 
 		return $body ?: [];
+	}
+
+	/**
+	 * Best-effort human-readable message from an error response.
+	 *
+	 * Handles the app's normal {error:{message}} envelope, DRF's raw
+	 * {detail: "..."} / {field: ["..."]} shapes (reached if a response ever
+	 * bypasses the custom exception handler), and finally a body that isn't
+	 * JSON at all (e.g. an intermediary like Cloudflare or a proxy returning
+	 * its own HTML/plain-text error page instead of the Django response) —
+	 * in that last case a raw "HTTP 400" string told the admin nothing they
+	 * could act on, so this points at the more likely real-world causes
+	 * instead (network/firewall interference, or a stale plugin build).
+	 */
+	private static function extract_error_message( $body, int $code, string $raw_body ): string {
+		if ( isset( $body['error']['message'] ) ) {
+			return (string) $body['error']['message'];
+		}
+		if ( isset( $body['detail'] ) ) {
+			return (string) $body['detail'];
+		}
+		if ( null === $body && defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			// Non-JSON body — an intermediary (proxy/CDN) answered instead
+			// of Django. Not shown to the admin (could be an HTML error
+			// page), but logged for whoever's debugging a live report.
+			error_log( sprintf( 'SAS: non-JSON error body (HTTP %d): %s', $code, substr( $raw_body, 0, 500 ) ) );
+		}
+		if ( is_array( $body ) ) {
+			foreach ( $body as $field => $errors ) {
+				if ( is_array( $errors ) && isset( $errors[0] ) ) {
+					return "{$field}: {$errors[0]}";
+				}
+			}
+		}
+		return sprintf(
+			/* translators: %d: HTTP status code */
+			__( 'Could not reach Meavr (HTTP %d) — this can be a temporary network/firewall issue, or this site running an older plugin build. Please try again, or update to the latest plugin version.', 'social-auto-scheduler' ),
+			$code
+		);
 	}
 }

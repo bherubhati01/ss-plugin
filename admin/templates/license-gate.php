@@ -25,9 +25,6 @@ $gate_success = get_transient( 'sas_license_success' ); delete_transient( 'sas_l
                 <?php esc_html_e( 'Meavr needs a license key to connect this website. Generate a FREE license key in under a minute — one key per website.', 'social-auto-scheduler' ); ?>
             </p>
 
-            <?php if ( $gate_error ) : ?>
-                <div class="sas-gate-notice sas-gate-notice--error"><?php echo esc_html( $gate_error ); ?></div>
-            <?php endif; ?>
             <?php if ( $gate_success ) : ?>
                 <div class="sas-gate-notice sas-gate-notice--success"><?php echo esc_html( $gate_success ); ?></div>
             <?php endif; ?>
@@ -76,15 +73,20 @@ $gate_success = get_transient( 'sas_license_success' ); delete_transient( 'sas_l
             <div class="sas-gate-divider"><span><?php esc_html_e( 'then activate', 'social-auto-scheduler' ); ?></span></div>
 
             <!-- Activation form -->
-            <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" class="sas-gate-form">
+            <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" class="sas-gate-form-wrap">
                 <?php wp_nonce_field( 'sas_activate_license' ); ?>
                 <input type="hidden" name="action" value="sas_activate_license">
-                <input type="text" name="sas_license_token" class="sas-gate-input"
-                       placeholder="<?php esc_attr_e( 'Paste your license key — XXXX-XXXX-XXXX-XXXX', 'social-auto-scheduler' ); ?>"
-                       required autocomplete="off">
-                <button type="submit" class="sas-gate-btn sas-gate-btn--primary sas-gate-btn--submit">
-                    <?php esc_html_e( 'Activate License', 'social-auto-scheduler' ); ?>
-                </button>
+                <div class="sas-gate-form">
+                    <input type="text" name="sas_license_token" class="sas-gate-input <?php echo $gate_error ? 'sas-gate-input--error' : ''; ?>"
+                           placeholder="<?php esc_attr_e( 'Paste your license key — XXXX-XXXX-XXXX-XXXX', 'social-auto-scheduler' ); ?>"
+                           required autocomplete="off">
+                    <button type="submit" class="sas-gate-btn sas-gate-btn--primary sas-gate-btn--submit">
+                        <?php esc_html_e( 'Activate License', 'social-auto-scheduler' ); ?>
+                    </button>
+                </div>
+                <?php if ( $gate_error ) : ?>
+                    <p class="sas-gate-field-error"><?php echo esc_html( $gate_error ); ?></p>
+                <?php endif; ?>
             </form>
 
             <p class="sas-gate-foot">
@@ -265,6 +267,7 @@ $gate_success = get_transient( 'sas_license_success' ); delete_transient( 'sas_l
         background: var(--sas-border);
     }
 
+    .sas-gate-form-wrap { text-align: left; }
     .sas-gate-form { display: flex; gap: 10px; }
     .sas-gate-input {
         flex: 1;
@@ -279,7 +282,14 @@ $gate_success = get_transient( 'sas_license_success' ); delete_transient( 'sas_l
     }
     .sas-gate-input::placeholder { color: var(--sas-text-muted) !important; }
     .sas-gate-input:focus { border-color: var(--sas-border-focus) !important; box-shadow: 0 0 0 3px var(--sas-primary-light); }
+    .sas-gate-input--error { border-color: var(--sas-danger) !important; }
     .sas-gate-btn--submit { flex-shrink: 0; }
+    .sas-gate-field-error {
+        margin: 8px 0 0;
+        font-size: 12.5px;
+        line-height: 1.5;
+        color: var(--sas-danger-text);
+    }
 
     .sas-gate-foot { margin: 18px 0 0; font-size: 12px; color: var(--sas-text-muted); }
     .sas-gate-foot a { color: var(--sas-primary); text-decoration: none; }
