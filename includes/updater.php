@@ -85,14 +85,16 @@ $sas_update_checker->setBranch( 'main' );
 
 // ── 4. Use GitHub Release assets as the update ZIP ─────────────────────────
 //
-// When you publish a GitHub Release, attach the plugin ZIP as a release
-// asset (any .zip filename works; naming it "social-auto-scheduler.zip"
-// is conventional).  PUC downloads that asset for one-click updates.
+// The release workflow (.github/workflows/release.yml) attaches exactly
+// one asset per release: Meavr-<version>.zip. The name regex isn't load-
+// bearing today (there's only ever one asset to pick from), but pins it
+// explicitly so a future release accidentally shipping a second asset
+// can't make PUC silently grab the wrong one.
 //
-// If no asset is attached PUC falls back to the source ZIP GitHub
-// generates automatically from the tag — which also works, but may
-// contain extra development files.
-$sas_update_checker->getVcsApi()->enableReleaseAssets();
+// If no matching asset is attached PUC falls back to the source ZIP
+// GitHub generates automatically from the tag — which also works, but
+// may contain extra development files.
+$sas_update_checker->getVcsApi()->enableReleaseAssets( '/^Meavr-.*\.zip$/i' );
 
 // ── 5. Private repository support (optional) ───────────────────────────────
 //

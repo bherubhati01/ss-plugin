@@ -64,13 +64,13 @@ jobs:
             --exclude='composer.lock' \
             ./ "build/$PLUGIN_DIR/"
           cd build
-          zip -r "../social-auto-scheduler-${{ steps.ver.outputs.version }}.zip" "$PLUGIN_DIR"
-          cd ..
-          # Fixed-name copy so the website's download button (an evergreen
-          # /releases/latest/download/... URL) always resolves to whatever
-          # was most recently released, without the frontend needing to
-          # know the current version number.
-          cp "social-auto-scheduler-${{ steps.ver.outputs.version }}.zip" "social-auto-scheduler-latest.zip"
+          # Branded, version-numbered filename — this is also what
+          # browsers save the file as, since GitHub serves release assets
+          # with Content-Disposition set to the uploaded asset's own name.
+          # The website's download button resolves the current release's
+          # asset dynamically (app/plugin-download/route.ts), so it always
+          # picks up whatever filename/version shipped most recently.
+          zip -r "../Meavr-${{ steps.ver.outputs.version }}.zip" "$PLUGIN_DIR"
 
       - name: Tag this release commit
         if: steps.check.outputs.skip == 'false'
@@ -85,6 +85,4 @@ jobs:
           tag_name: ${{ steps.ver.outputs.tag }}
           name: ${{ steps.ver.outputs.tag }}
           generate_release_notes: true
-          files: |
-            social-auto-scheduler-${{ steps.ver.outputs.version }}.zip
-            social-auto-scheduler-latest.zip
+          files: Meavr-${{ steps.ver.outputs.version }}.zip
