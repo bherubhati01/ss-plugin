@@ -1243,6 +1243,7 @@
         const labels = {
             draft:'Draft', queued:'Queued', scheduled:'Scheduled',
             publishing:'Publishing', published:'Published',
+            partially_published:'Partially Published',
             failed:'Failed', cancelled:'Cancelled',
         };
         return `<span class="sas-badge sas-badge--${esc(status)}">${esc(labels[status] || status)}</span>`;

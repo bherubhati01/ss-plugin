@@ -744,6 +744,7 @@ body.sas-dark {
 .sas-badge--scheduled  { background: var(--sas-primary-light); color: var(--sas-scheduled); }
 .sas-badge--publishing { background: var(--sas-warning-bg); color: var(--sas-warning-text); }
 .sas-badge--published  { background: var(--sas-success-bg); color: var(--sas-success-text); }
+.sas-badge--partially_published { background: var(--sas-warning-bg); color: var(--sas-warning-text); }
 .sas-badge--failed     { background: var(--sas-danger-bg); color: var(--sas-danger-text); }
 .sas-badge--cancelled  { background: var(--sas-surface-2); color: var(--sas-cancelled); border: 1px solid var(--sas-border); }
 

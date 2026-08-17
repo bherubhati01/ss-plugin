@@ -77,6 +77,7 @@ if (!defined('ABSPATH')) {
                         <option value="scheduled"><?php esc_html_e('Scheduled', 'social-auto-scheduler'); ?></option>
                         <option value="publishing"><?php esc_html_e('Publishing', 'social-auto-scheduler'); ?></option>
                         <option value="published"><?php esc_html_e('Published', 'social-auto-scheduler'); ?></option>
+                        <option value="partially_published"><?php esc_html_e('Partially Published', 'social-auto-scheduler'); ?></option>
                         <option value="failed"><?php esc_html_e('Failed', 'social-auto-scheduler'); ?></option>
                     </select>
                     <select id="sas-platform-filter" class="sas-select">
