@@ -146,6 +146,10 @@ class SAS_Admin {
         $connected = sanitize_key( $_GET['sas_connected'] ?? '' );
         $error     = sanitize_text_field( $_GET['sas_error'] ?? '' );
 
+        if ( ! $connected && ! $error ) {
+            return;
+        }
+
         if ( $connected ) {
             $label = $connected === 'youtube' ? 'YouTube' : 'Instagram';
             set_transient( 'sas_oauth_success', $connected, 60 );
@@ -155,10 +159,7 @@ class SAS_Admin {
                 'platform' => $connected,
                 'step'     => "SUCCESS:{$label}",
             ] );
-            return;
-        }
-
-        if ( $error ) {
+        } elseif ( $error ) {
             set_transient( 'sas_oauth_error', $error, 60 );
             update_option( 'sas_oauth_debug', [
                 'v'    => '1.0.3',
@@ -166,6 +167,76 @@ class SAS_Admin {
                 'step' => "ERROR:{$error}",
             ] );
         }
+
+        // Strip sas_connected/sas_error from the URL so refreshing the page
+        // doesn't re-trigger this handler and re-show the notice forever.
+        wp_safe_redirect( remove_query_arg( [ 'sas_connected', 'sas_error' ] ) );
+        exit;
+    }
+
+    // -------------------------------------------------------------------------
+    // OAuth result notices (fires on admin_notices)
+    // Reads the transients set above and shows a standard admin notice once,
+    // then clears it. Previously these transients were written but never
+    // read anywhere — a rejected connect (wrong account, already connected
+    // to a different Meavr account, expired session, etc.) failed
+    // completely silently, with no indication to the admin that anything
+    // had gone wrong at all.
+    // -------------------------------------------------------------------------
+
+    public function render_oauth_notices(): void {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            return;
+        }
+
+        $connected = get_transient( 'sas_oauth_success' );
+        if ( $connected ) {
+            delete_transient( 'sas_oauth_success' );
+            $label = $connected === 'youtube' ? 'YouTube' : 'Instagram';
+            printf(
+                '<div class="notice notice-success is-dismissible"><p>%s</p></div>',
+                esc_html( sprintf(
+                    /* translators: %s: platform name, e.g. "YouTube" */
+                    __( '%s account connected successfully.', 'social-auto-scheduler' ),
+                    $label
+                ) )
+            );
+        }
+
+        $error = get_transient( 'sas_oauth_error' );
+        if ( $error ) {
+            delete_transient( 'sas_oauth_error' );
+            printf(
+                '<div class="notice notice-error is-dismissible"><p>%s</p></div>',
+                esc_html( $this->oauth_error_message( $error ) )
+            );
+        }
+    }
+
+    private function oauth_error_message( string $code ): string {
+        // Google/Meta itself can redirect back with ?error=<reason> (user
+        // clicked "Cancel" on the consent screen, denied a scope, etc.) —
+        // the backend forwards that as "oauth_error:<reason>" rather than
+        // one of its own fixed codes.
+        if ( strpos( $code, 'oauth_error:' ) === 0 ) {
+            return __( 'Connection was cancelled or denied — please try again.', 'social-auto-scheduler' );
+        }
+
+        $messages = [
+            'already_connected_elsewhere' => __( 'This account is already connected to a different Meavr account. Disconnect it there first, then try again.', 'social-auto-scheduler' ),
+            'exchange_failed'             => __( 'Could not complete the connection — please try again.', 'social-auto-scheduler' ),
+            'invalid_state'               => __( 'The connection request expired or was invalid — please try again.', 'social-auto-scheduler' ),
+            'missing_code'                => __( 'The connection request was incomplete — please try again.', 'social-auto-scheduler' ),
+            'platform_not_configured'     => __( 'This platform is not currently available.', 'social-auto-scheduler' ),
+            'user_not_found'              => __( 'Could not identify your Meavr account — please log in and try again.', 'social-auto-scheduler' ),
+            'unsupported_platform'        => __( 'This platform is not supported.', 'social-auto-scheduler' ),
+        ];
+
+        return $messages[ $code ] ?? sprintf(
+            /* translators: %s: raw error code returned by the backend */
+            __( 'Connection failed (%s). Please try again.', 'social-auto-scheduler' ),
+            str_replace( '_', ' ', $code )
+        );
     }
 
     // -------------------------------------------------------------------------
