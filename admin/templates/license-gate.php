@@ -49,7 +49,7 @@ $gate_success = get_transient( 'sas_license_success' ); delete_transient( 'sas_l
                     <span class="sas-gate-step-num">3</span>
                     <div>
                         <strong><?php esc_html_e( 'Paste the key below', 'social-auto-scheduler' ); ?></strong>
-                        <p><?php esc_html_e( 'Activate it and start scheduling videos to YouTube & Instagram.', 'social-auto-scheduler' ); ?></p>
+                        <p><?php esc_html_e( 'Activate it and start scheduling videos to YouTube, Instagram & Facebook.', 'social-auto-scheduler' ); ?></p>
                     </div>
                 </div>
             </div>

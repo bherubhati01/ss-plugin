@@ -151,7 +151,7 @@ class SAS_Admin {
         }
 
         if ( $connected ) {
-            $label = $connected === 'youtube' ? 'YouTube' : 'Instagram';
+            $label = self::platform_label( $connected );
             set_transient( 'sas_oauth_success', $connected, 60 );
             update_option( 'sas_oauth_debug', [
                 'v'        => '1.0.3',
@@ -192,7 +192,7 @@ class SAS_Admin {
         $connected = get_transient( 'sas_oauth_success' );
         if ( $connected ) {
             delete_transient( 'sas_oauth_success' );
-            $label = $connected === 'youtube' ? 'YouTube' : 'Instagram';
+            $label = self::platform_label( $connected );
             printf(
                 '<div class="notice notice-success is-dismissible"><p>%s</p></div>',
                 esc_html( sprintf(
@@ -211,6 +211,11 @@ class SAS_Admin {
                 esc_html( $this->oauth_error_message( $error ) )
             );
         }
+    }
+
+    private static function platform_label( string $platform ): string {
+        $labels = [ 'youtube' => 'YouTube', 'instagram' => 'Instagram', 'facebook' => 'Facebook' ];
+        return $labels[ $platform ] ?? ucfirst( $platform );
     }
 
     private function oauth_error_message( string $code ): string {

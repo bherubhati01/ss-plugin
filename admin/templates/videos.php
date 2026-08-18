@@ -31,7 +31,7 @@ if (!defined('ABSPATH')) {
                     </span>
                 </label>
                 <span class="sas-field__help" id="sas-content-type-help-videos" style="display:none;flex-basis:100%;">
-                    <?php esc_html_e('Stories are Instagram-only and publish without a caption.', 'social-auto-scheduler'); ?>
+                    <?php esc_html_e('Stories can only publish to Instagram or Facebook, and publish without a caption.', 'social-auto-scheduler'); ?>
                 </span>
             </div>
 
@@ -50,6 +50,13 @@ if (!defined('ABSPATH')) {
                     <span class="sas-platform-toggle__inner sas-platform-toggle__inner--instagram">
                         <img src="<?php echo esc_url( SAS_PLUGIN_URL . 'assets/images/instagram.svg' ); ?>" width="16" height="16" alt="" style="vertical-align:middle;object-fit:contain;">
                         Instagram
+                    </span>
+                </label>
+                <label class="sas-platform-toggle">
+                    <input type="checkbox" class="sas-upload-platform" name="platforms[]" value="facebook" />
+                    <span class="sas-platform-toggle__inner sas-platform-toggle__inner--facebook">
+                        <img src="<?php echo esc_url( SAS_PLUGIN_URL . 'assets/images/facebook.svg' ); ?>" width="16" height="16" alt="" style="vertical-align:middle;object-fit:contain;">
+                        Facebook
                     </span>
                 </label>
             </div>
@@ -84,6 +91,7 @@ if (!defined('ABSPATH')) {
                         <option value=""><?php esc_html_e('All Platforms', 'social-auto-scheduler'); ?></option>
                         <option value="youtube">YouTube</option>
                         <option value="instagram">Instagram</option>
+                        <option value="facebook">Facebook</option>
                     </select>
                 </div>
                 <div class="sas-toolbar__right">
@@ -155,6 +163,7 @@ if (!defined('ABSPATH')) {
                 <select id="sas-edit-platform" class="sas-select" disabled>
                     <option value="youtube">YouTube</option>
                     <option value="instagram">Instagram</option>
+                    <option value="facebook">Facebook</option>
                 </select>
                 <p class="sas-field__help"><?php esc_html_e('Platform cannot be changed after a video has been added — delete and re-upload to use a different platform.', 'social-auto-scheduler'); ?></p>
             </div>

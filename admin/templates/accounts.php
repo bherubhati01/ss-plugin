@@ -16,7 +16,7 @@ $sas_frontend = untrailingslashit( SAS_FRONTEND_URL );
 
 	<div class="sas-notice sas-notice--info">
 		<strong><?php esc_html_e( 'Connecting accounts happens in your Meavr dashboard.', 'social-auto-scheduler' ); ?></strong>
-		<?php esc_html_e( 'Log in to your dashboard, open Social Accounts, and connect YouTube or Instagram to this website. Connected accounts appear here automatically.', 'social-auto-scheduler' ); ?>
+		<?php esc_html_e( 'Log in to your dashboard, open Social Accounts, and connect YouTube, Instagram, or Facebook to this website. Connected accounts appear here automatically.', 'social-auto-scheduler' ); ?>
 	</div>
 
 	<div class="sas-accounts-grid">
@@ -40,6 +40,18 @@ $sas_frontend = untrailingslashit( SAS_FRONTEND_URL );
 			<h3>Instagram</h3>
 			<p class="sas-account-card__desc"><?php esc_html_e( 'Automatically publish scheduled Reels to your Instagram Business account.', 'social-auto-scheduler' ); ?></p>
 			<div id="sas-instagram-status" class="sas-account-card__status">
+				<div class="sas-loading-skeleton"></div>
+			</div>
+		</div>
+
+		<!-- Facebook -->
+		<div class="sas-account-card" id="sas-facebook-card">
+			<div class="sas-account-card__logo sas-account-card__logo--facebook">
+				<img src="<?php echo esc_url( SAS_PLUGIN_URL . 'assets/images/facebook.svg' ); ?>" width="48" height="48" alt="Facebook" style="object-fit:contain;">
+			</div>
+			<h3>Facebook</h3>
+			<p class="sas-account-card__desc"><?php esc_html_e( 'Automatically publish scheduled videos and Stories to your Facebook Page.', 'social-auto-scheduler' ); ?></p>
+			<div id="sas-facebook-status" class="sas-account-card__status">
 				<div class="sas-loading-skeleton"></div>
 			</div>
 		</div>
@@ -72,7 +84,7 @@ $sas_frontend = untrailingslashit( SAS_FRONTEND_URL );
 					?>
 				</li>
 				<li><?php esc_html_e( 'Go to Social Accounts and select this website.', 'social-auto-scheduler' ); ?></li>
-				<li><?php esc_html_e( 'Click Connect on YouTube or Instagram and approve access.', 'social-auto-scheduler' ); ?></li>
+				<li><?php esc_html_e( 'Click Connect on YouTube, Instagram, or Facebook and approve access.', 'social-auto-scheduler' ); ?></li>
 				<li><?php esc_html_e( 'Done — the account appears here and scheduled videos publish automatically.', 'social-auto-scheduler' ); ?></li>
 			</ol>
 		</div>
@@ -85,7 +97,7 @@ $sas_frontend = untrailingslashit( SAS_FRONTEND_URL );
 		</div>
 		<div class="sas-card__body">
 			<p class="sas-field__help">
-				<?php esc_html_e( 'Connecting a YouTube or Instagram account shares limited profile and publishing data with Meavr. See how it&#8217;s used, or remove it at any time.', 'social-auto-scheduler' ); ?>
+				<?php esc_html_e( 'Connecting a YouTube, Instagram, or Facebook account shares limited profile and publishing data with Meavr. See how it&#8217;s used, or remove it at any time.', 'social-auto-scheduler' ); ?>
 			</p>
 			<p style="margin-top:8px;">
 				<a href="<?php echo esc_url( $sas_frontend . '/privacy' ); ?>" target="_blank" rel="noopener noreferrer"><?php esc_html_e( 'Privacy Policy', 'social-auto-scheduler' ); ?></a>

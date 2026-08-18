@@ -108,36 +108,50 @@
         return checked ? checked.value : 'reel';
     }
 
+    // Stories have no YouTube equivalent — only Instagram and Facebook can
+    // receive them (mirrors the backend's VideoService._resolve_accounts).
+    const STORY_CAPABLE_PLATFORMS = ['instagram', 'facebook'];
+
     /**
-     * Stories are Instagram-only. When the content-type radios switch to
-     * 'story', lock the platform selector to Instagram (and back when
-     * switching to Reel/Video) so the upload can never target YouTube with
-     * an unsupported post type.
+     * When the content-type radios switch to 'story', disable + uncheck
+     * any non-Story-capable platform toggle (and restore it when switching
+     * back to Reel/Video) so the upload can never target a platform with
+     * an unsupported post type. If switching to Story leaves nothing
+     * checked, auto-check the first Story-capable toggle rather than
+     * silently leaving the upload targeting zero accounts.
      */
     function wireContentTypeLock(cardEl) {
         const contentTypeRadios = [...cardEl.querySelectorAll('.sas-upload-content-type')];
         const help              = cardEl.querySelector('[id^="sas-content-type-help"]');
-        const ytToggle          = cardEl.querySelector('.sas-upload-platform[value="youtube"]');
-        const igToggle          = cardEl.querySelector('.sas-upload-platform[value="instagram"]');
-        if (!contentTypeRadios.length || !ytToggle || !igToggle) return;
+        const toggles           = [...cardEl.querySelectorAll('.sas-upload-platform')];
+        if (!contentTypeRadios.length || !toggles.length) return;
 
-        let ytWasChecked = ytToggle.checked;
+        const wasChecked = new Map(toggles.map(t => [t.value, t.checked]));
 
         function apply() {
             const isStory = getSelectedContentType(cardEl) === 'story';
             if (help) help.style.display = isStory ? '' : 'none';
 
-            const ytLabel = ytToggle.closest('.sas-platform-toggle');
-            if (isStory) {
-                ytWasChecked = ytToggle.checked;
-                ytToggle.checked = false;
-                ytToggle.disabled = true;
-                if (ytLabel) ytLabel.classList.add('sas-platform-toggle--disabled');
-                igToggle.checked = true;
-            } else {
-                ytToggle.disabled = false;
-                if (ytLabel) ytLabel.classList.remove('sas-platform-toggle--disabled');
-                ytToggle.checked = ytWasChecked;
+            toggles.forEach(toggle => {
+                const label = toggle.closest('.sas-platform-toggle');
+                const storyCapable = STORY_CAPABLE_PLATFORMS.includes(toggle.value);
+                if (isStory) {
+                    if (!storyCapable) {
+                        wasChecked.set(toggle.value, toggle.checked);
+                        toggle.checked = false;
+                        toggle.disabled = true;
+                        if (label) label.classList.add('sas-platform-toggle--disabled');
+                    }
+                } else {
+                    toggle.disabled = false;
+                    if (label) label.classList.remove('sas-platform-toggle--disabled');
+                    toggle.checked = wasChecked.get(toggle.value) ?? toggle.checked;
+                }
+            });
+
+            if (isStory && !toggles.some(t => STORY_CAPABLE_PLATFORMS.includes(t.value) && t.checked)) {
+                const first = toggles.find(t => STORY_CAPABLE_PLATFORMS.includes(t.value));
+                if (first) first.checked = true;
             }
         }
 
@@ -265,8 +279,8 @@
                 if (!platforms.length) {
                     toast.error(
                         contentType === 'story'
-                            ? 'Please connect an Instagram account to upload Stories.'
-                            : 'Please select at least one platform (YouTube or Instagram).'
+                            ? 'Please connect an Instagram or Facebook account to upload Stories.'
+                            : 'Please select at least one platform (YouTube, Instagram, or Facebook).'
                     );
                     return;
                 }
@@ -926,6 +940,20 @@
                 el.textContent = 'Connect Instagram';
             }
         });
+
+        document.getElementById('sas-connect-facebook')?.addEventListener('click', async (btn) => {
+            const el = btn.target || btn.currentTarget;
+            el.disabled = true;
+            el.textContent = sasData.strings.connecting;
+            try {
+                const { url } = await api.get('/oauth/facebook/url');
+                window.location.href = url;
+            } catch (e) {
+                toast.error(e.message);
+                el.disabled    = false;
+                el.textContent = 'Connect Facebook';
+            }
+        });
     }
 
     async function loadAccounts() {
@@ -935,9 +963,11 @@
             // Update status for each platform card
             const ytCard  = document.getElementById('sas-youtube-status');
             const igCard  = document.getElementById('sas-instagram-status');
+            const fbCard  = document.getElementById('sas-facebook-status');
 
             const ytAcc = accounts.find(a => a.platform === 'youtube');
             const igAcc = accounts.find(a => a.platform === 'instagram');
+            const fbAcc = accounts.find(a => a.platform === 'facebook');
 
             if (ytCard) {
                 ytCard.innerHTML = ytAcc
@@ -948,6 +978,12 @@
             if (igCard) {
                 igCard.innerHTML = igAcc
                     ? `<span class="sas-account-card__status--connected"><span class="dashicons dashicons-yes-alt"></span> Connected: ${esc(igAcc.account_name)}</span>`
+                    : '<span class="sas-text-muted">Not connected</span>';
+            }
+
+            if (fbCard) {
+                fbCard.innerHTML = fbAcc
+                    ? `<span class="sas-account-card__status--connected"><span class="dashicons dashicons-yes-alt"></span> Connected: ${esc(fbAcc.account_name)}</span>`
                     : '<span class="sas-text-muted">Not connected</span>';
             }
 
@@ -1249,7 +1285,7 @@
         return `<span class="sas-badge sas-badge--${esc(status)}">${esc(labels[status] || status)}</span>`;
     }
 
-    const PLATFORM_ICONS = { youtube: 'youtube.svg', instagram: 'instagram.svg' };
+    const PLATFORM_ICONS = { youtube: 'youtube.svg', instagram: 'instagram.svg', facebook: 'facebook.svg' };
 
     function platformBadge(platform) {
         const icon = PLATFORM_ICONS[platform];

@@ -79,6 +79,9 @@ class SAS_API {
         register_rest_route($ns, '/oauth/instagram/url', [
             ['methods' => 'GET', 'callback' => [$this, 'instagram_oauth_url'], 'permission_callback' => [$this, 'auth']],
         ]);
+        register_rest_route($ns, '/oauth/facebook/url', [
+            ['methods' => 'GET', 'callback' => [$this, 'facebook_oauth_url'], 'permission_callback' => [$this, 'auth']],
+        ]);
 
         // --- Logs ---
         register_rest_route($ns, '/logs', [
@@ -643,6 +646,15 @@ class SAS_API {
     public function instagram_oauth_url(): WP_REST_Response|WP_Error {
         try {
             $service = new SAS_Instagram_Service();
+            return new WP_REST_Response( [ 'url' => $service->get_auth_url() ], 200 );
+        } catch ( \Throwable $e ) {
+            return new WP_Error( 'oauth_error', $e->getMessage(), [ 'status' => 400 ] );
+        }
+    }
+
+    public function facebook_oauth_url(): WP_REST_Response|WP_Error {
+        try {
+            $service = new SAS_Facebook_Service();
             return new WP_REST_Response( [ 'url' => $service->get_auth_url() ], 200 );
         } catch ( \Throwable $e ) {
             return new WP_Error( 'oauth_error', $e->getMessage(), [ 'status' => 400 ] );

@@ -509,6 +509,13 @@ body.sas-dark {
     color: #fff;
 }
 
+/* Checked / active state – Facebook */
+.sas-platform-toggle input:checked + .sas-platform-toggle__inner--facebook {
+    background: #0866FF;
+    border-color: #0866FF;
+    color: #fff;
+}
+
 /* Checked / active state – Reel/Video content type */
 .sas-platform-toggle input:checked + .sas-platform-toggle__inner--reel {
     background: var(--sas-primary);
@@ -516,8 +523,11 @@ body.sas-dark {
     color: #fff;
 }
 
-/* Checked / active state – Story content type (Instagram-only, so it
-   borrows the Instagram gradient as a visual cue). */
+/* Checked / active state – Story content type (purely decorative — Story
+   eligibility itself is enforced elsewhere, see wireContentTypeLock in
+   admin.js — borrows the Instagram gradient as a visual cue since Stories
+   started as Instagram-only; kept even now that Facebook Stories exist
+   too, just as a "this is a Story" accent rather than a platform color). */
 .sas-platform-toggle input:checked + .sas-platform-toggle__inner--story {
     background: linear-gradient(135deg, #f09433, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888);
     border-color: #dc2743;
@@ -773,6 +783,7 @@ body.sas-dark {
 
 .sas-platform--youtube  { color: #FF0000; }
 .sas-platform--instagram { color: #E1306C; }
+.sas-platform--facebook { color: #0866FF; }
 
 /* ============================================================
    Toolbar

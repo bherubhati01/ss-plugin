@@ -35,7 +35,7 @@ class SAS_Upload_Service {
 		if ( ! is_array( $raw ) ) {
 			$raw = [ $raw ];
 		}
-		$allowed = [ 'youtube', 'instagram' ];
+		$allowed = [ 'youtube', 'instagram', 'facebook' ];
 		$out     = [];
 		foreach ( $raw as $p ) {
 			$p = sanitize_key( (string) $p );
@@ -48,8 +48,9 @@ class SAS_Upload_Service {
 
 	/**
 	 * Sanitize a content_type input down to 'reel' (default) or 'story'.
-	 * Stories are Instagram-only — see SAS_Upload_Service::send_to_backend()
-	 * and the backend's VideoService, which both enforce this independently.
+	 * Stories can only publish to Instagram or Facebook — see
+	 * SAS_Upload_Service::send_to_backend() and the backend's VideoService,
+	 * which both enforce this independently.
 	 */
 	public static function sanitize_content_type( $raw ): string {
 		$val = sanitize_key( (string) $raw );
@@ -304,11 +305,11 @@ class SAS_Upload_Service {
 		$platforms    = array_values( array_filter( array_map( 'sanitize_key', $platforms ) ) );
 		$content_type = self::sanitize_content_type( $meta['content_type'] ?? 'reel' );
 
-		// Stories are Instagram-only — the backend enforces this too, but
-		// filtering here avoids silently dropping the whole request if a
-		// non-Instagram platform slipped through the UI.
+		// Stories can only publish to Instagram or Facebook — the backend
+		// enforces this too, but filtering here avoids silently dropping the
+		// whole request if a non-Story-capable platform slipped through the UI.
 		if ( 'story' === $content_type ) {
-			$platforms = array_values( array_intersect( $platforms, [ 'instagram' ] ) );
+			$platforms = array_values( array_intersect( $platforms, [ 'instagram', 'facebook' ] ) );
 		}
 
 		$body = [
