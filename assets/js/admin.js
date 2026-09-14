@@ -282,7 +282,7 @@
                 if (!platforms.length) {
                     toast.error(
                         contentType === 'story'
-                            ? 'Please connect an Instagram or Facebook account to upload Stories.'
+                            ? 'Please connect an Instagram account to upload Stories.'
                             : 'Please select at least one platform (YouTube, Instagram, or Facebook).'
                     );
                     return;

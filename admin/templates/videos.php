@@ -31,7 +31,7 @@ if (!defined('ABSPATH')) {
                     </span>
                 </label>
                 <span class="sas-field__help" id="sas-content-type-help-videos" style="display:none;flex-basis:100%;">
-                    <?php esc_html_e('Stories can only publish to Instagram or Facebook, and publish without a caption.', 'social-auto-scheduler'); ?>
+                    <?php esc_html_e('Stories can only publish to Instagram, and publish without a caption.', 'social-auto-scheduler'); ?>
                 </span>
             </div>
 

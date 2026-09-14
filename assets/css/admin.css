@@ -525,9 +525,8 @@ body.sas-dark {
 
 /* Checked / active state – Story content type (purely decorative — Story
    eligibility itself is enforced elsewhere, see wireContentTypeLock in
-   admin.js — borrows the Instagram gradient as a visual cue since Stories
-   started as Instagram-only; kept even now that Facebook Stories exist
-   too, just as a "this is a Story" accent rather than a platform color). */
+   admin.js — borrows the Instagram gradient as a visual cue, since Story
+   publishing is Instagram-only for now). */
 .sas-platform-toggle input:checked + .sas-platform-toggle__inner--story {
     background: linear-gradient(135deg, #f09433, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888);
     border-color: #dc2743;
