@@ -108,9 +108,12 @@
         return checked ? checked.value : 'reel';
     }
 
-    // Stories have no YouTube equivalent — only Instagram and Facebook can
-    // receive them (mirrors the backend's VideoService._resolve_accounts).
-    const STORY_CAPABLE_PLATFORMS = ['instagram', 'facebook'];
+    // Stories have no YouTube equivalent. Facebook Story publishing is
+    // temporarily disabled here — repeated Graph API failures on Meta's
+    // side that aren't fully resolved yet — so only Instagram can receive
+    // them for now (mirrors the backend's VideoService._resolve_accounts).
+    // Add 'facebook' back once that's fixed.
+    const STORY_CAPABLE_PLATFORMS = ['instagram'];
 
     /**
      * When the content-type radios switch to 'story', disable + uncheck
