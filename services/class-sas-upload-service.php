@@ -223,14 +223,13 @@ class SAS_Upload_Service {
 
 		$attachment_id = $this->upload_to_media_library( $file );
 		$file_url      = wp_get_attachment_url( $attachment_id );
-		$thumbnail_url = $this->get_thumbnail_url( $attachment_id );
 
 		if ( ! $file_url ) {
 			throw new RuntimeException( __( 'Could not retrieve URL for uploaded video.', 'social-auto-scheduler' ) );
 		}
 
 		$meta['wp_attachment_id'] = $attachment_id;
-		return $this->send_to_backend( $file_url, $thumbnail_url, $meta );
+		return $this->send_to_backend( $file_url, $meta );
 	}
 
 	// ── Register a video URL that's already in the Media Library ─────────────
@@ -244,15 +243,14 @@ class SAS_Upload_Service {
 	 * @return array Backend video object.
 	 */
 	public function register_attachment( int $attachment_id, array $meta ): array {
-		$file_url      = wp_get_attachment_url( $attachment_id );
-		$thumbnail_url = $this->get_thumbnail_url( $attachment_id );
+		$file_url = wp_get_attachment_url( $attachment_id );
 
 		if ( ! $file_url ) {
 			throw new RuntimeException( __( 'Invalid attachment ID.', 'social-auto-scheduler' ) );
 		}
 
 		$meta['wp_attachment_id'] = $attachment_id;
-		return $this->send_to_backend( $file_url, $thumbnail_url, $meta );
+		return $this->send_to_backend( $file_url, $meta );
 	}
 
 	// ── Internal helpers ──────────────────────────────────────────────────────
@@ -283,12 +281,7 @@ class SAS_Upload_Service {
 		return (int) $attachment_id;
 	}
 
-	private function get_thumbnail_url( int $attachment_id ): string {
-		$thumb = wp_get_attachment_image_url( $attachment_id, 'large' );
-		return $thumb ?: '';
-	}
-
-	private function send_to_backend( string $file_url, string $thumbnail_url, array $meta ): array {
+	private function send_to_backend( string $file_url, array $meta ): array {
 		if ( ! SAS_License_Manager::is_active() ) {
 			throw new RuntimeException( __( 'Plugin is not connected to the backend. Please activate your license.', 'social-auto-scheduler' ) );
 		}
@@ -314,7 +307,6 @@ class SAS_Upload_Service {
 
 		$body = [
 			'file_url'         => $file_url,
-			'thumbnail_url'    => $thumbnail_url,
 			'caption'          => 'story' === $content_type ? '' : sanitize_text_field( $meta['caption'] ?? '' ),
 			'description'      => 'story' === $content_type ? '' : sanitize_textarea_field( $meta['description'] ?? '' ),
 			'tags'             => 'story' === $content_type ? [] : SAS_Helpers::sanitize_tags( $meta['tags'] ?? [] ),

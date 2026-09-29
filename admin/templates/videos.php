@@ -111,7 +111,6 @@ if (!defined('ABSPATH')) {
                     <thead>
                         <tr>
                             <th class="sas-col-check"><input type="checkbox" id="sas-select-all" /></th>
-                            <th class="sas-col-thumb"><?php esc_html_e('Thumbnail', 'social-auto-scheduler'); ?></th>
                             <th class="sas-col-title sas-sortable" data-sort="title"><?php esc_html_e('Title', 'social-auto-scheduler'); ?></th>
                             <th><?php esc_html_e('Platform', 'social-auto-scheduler'); ?></th>
                             <th><?php esc_html_e('Status', 'social-auto-scheduler'); ?></th>
@@ -122,7 +121,7 @@ if (!defined('ABSPATH')) {
                         </tr>
                     </thead>
                     <tbody id="sas-videos-table-body">
-                        <tr><td colspan="9" class="sas-table__loading"><div class="sas-loading-skeleton"></div></td></tr>
+                        <tr><td colspan="8" class="sas-table__loading"><div class="sas-loading-skeleton"></div></td></tr>
                     </tbody>
                 </table>
             </div>

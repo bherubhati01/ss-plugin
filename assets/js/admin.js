@@ -585,15 +585,12 @@
             videosTotal = videos.length; // approximate
 
             if (!videos.length) {
-                tbody.innerHTML = '<tr><td colspan="9" class="sas-empty">No videos found.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="8" class="sas-empty">No videos found.</td></tr>';
                 document.getElementById('sas-pagination').innerHTML = '';
                 return;
             }
 
             tbody.innerHTML = videos.map(v => {
-                const thumb = v.thumbnail_url
-                    ? `<img src="${esc(v.thumbnail_url)}" class="sas-table__thumb" alt="" />`
-                    : `<span class="sas-table__no-thumb"><span class="dashicons dashicons-format-video"></span></span>`;
                 const date  = v.publish_date ? formatDate(v.publish_date) : '—';
                 const dur   = v.duration    ? formatDuration(Number(v.duration)) : '—';
                 const size  = v.file_size   ? formatBytes(Number(v.file_size))   : '—';
@@ -611,7 +608,6 @@
                 return `
                 <tr data-id="${esc(v.id)}">
                     <td><input type="checkbox" class="sas-video-check" value="${esc(v.id)}" /></td>
-                    <td>${thumb}</td>
                     <td><strong>${esc(v.title)}</strong> ${contentTypeBadge(v.content_type)}</td>
                     <td>${platformBadge(v.platform)}</td>
                     <td>${statusBadge(v.status)}</td>
