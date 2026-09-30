@@ -305,14 +305,41 @@ class SAS_Upload_Service {
 			$platforms = array_values( array_intersect( $platforms, [ 'instagram', 'facebook' ] ) );
 		}
 
+		// "Default Description"/"Default Tags" (Settings → Default Video
+		// Settings) only ever applied if the caller left these blank — the
+		// Quick Upload flow never collects a description/tags at all, so
+		// without this fallback those two settings were saved but silently
+		// never used for anything.
+		$settings    = new SAS_Settings_Service();
+		$description = sanitize_textarea_field( $meta['description'] ?? '' );
+		if ( '' === $description ) {
+			$description = sanitize_textarea_field( (string) $settings->get( 'default_description', null, '' ) );
+		}
+		$tags = SAS_Helpers::sanitize_tags( $meta['tags'] ?? [] );
+		if ( empty( $tags ) ) {
+			$tags = SAS_Helpers::sanitize_tags( (string) $settings->get( 'default_tags', null, '' ) );
+		}
+
+		// "YouTube Upload Defaults" (category/privacy) likewise only ever
+		// applied if passed through in metadata — YouTubePublisher on the
+		// backend already reads video.metadata['category_id'/'privacy'],
+		// but nothing here ever populated it, so those two settings were
+		// also saved and silently ignored. Harmless to always include: the
+		// other platforms' publishers never read this metadata.
+		$metadata = [
+			'category_id' => (string) $settings->get( 'youtube_category', null, '22' ),
+			'privacy'     => (string) $settings->get( 'youtube_privacy', null, 'public' ),
+		];
+
 		$body = [
 			'file_url'         => $file_url,
 			'caption'          => 'story' === $content_type ? '' : sanitize_text_field( $meta['caption'] ?? '' ),
-			'description'      => 'story' === $content_type ? '' : sanitize_textarea_field( $meta['description'] ?? '' ),
-			'tags'             => 'story' === $content_type ? [] : SAS_Helpers::sanitize_tags( $meta['tags'] ?? [] ),
+			'description'      => 'story' === $content_type ? '' : $description,
+			'tags'             => 'story' === $content_type ? [] : $tags,
 			'content_type'     => $content_type,
 			'platforms'        => $platforms ?: [ 'story' === $content_type ? 'instagram' : 'youtube' ],
 			'scheduled_at'     => $meta['scheduled_at'] ?? null,
+			'metadata'         => $metadata,
 			// So the backend knows to offer this video for the 48h-after-publish
 			// Media Library cleanup sweep — see cron/class-sas-cron.php.
 			'wp_attachment_id' => isset( $meta['wp_attachment_id'] ) ? (int) $meta['wp_attachment_id'] : null,

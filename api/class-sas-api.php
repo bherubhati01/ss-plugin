@@ -556,9 +556,8 @@ class SAS_API {
 
         $safe_keys = [
             'upload_time', 'upload_times', 'uploads_per_day', 'weekdays',
-            'default_description', 'default_tags', 'youtube_client_id',
-            'youtube_category', 'youtube_privacy', 'instagram_app_id',
-            'instagram_config_id',
+            'default_description', 'default_tags',
+            'youtube_category', 'youtube_privacy',
         ];
 
         foreach ($safe_keys as $key) {
@@ -586,14 +585,6 @@ class SAS_API {
             }
 
             $service->set($key, $val);
-        }
-
-        // Secrets encrypted before storage
-        if (!empty($data['youtube_client_secret'])) {
-            $service->set('youtube_client_secret_enc', SAS_Token_Service::encrypt(sanitize_text_field($data['youtube_client_secret'])));
-        }
-        if (!empty($data['instagram_app_secret'])) {
-            $service->set('instagram_app_secret_enc', SAS_Token_Service::encrypt(sanitize_text_field($data['instagram_app_secret'])));
         }
 
         return new WP_REST_Response(['success' => true], 200);

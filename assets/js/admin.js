@@ -568,7 +568,7 @@
         const tbody = document.getElementById('sas-videos-table-body');
         if (!tbody) return;
 
-        tbody.innerHTML = '<tr><td colspan="9" class="sas-table__loading"><div class="sas-loading-skeleton"></div></td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="sas-table__loading"><div class="sas-loading-skeleton"></div></td></tr>';
 
         try {
             const offset = (videosState.page - 1) * videosState.limit;
@@ -576,11 +576,25 @@
                 search:   videosState.search,
                 status:   videosState.status,
                 platform: videosState.platform,
-                orderby:  videosState.sort,
-                order:    videosState.order,
                 limit:    videosState.limit,
                 offset,
             });
+
+            // SAS_API::get_videos() proxies the backend's plugin video list,
+            // which doesn't support an ordering param — sorting here,
+            // client-side, on the current page only. duration/file_size are
+            // always 0 (not tracked backend-side, see map_backend_video()),
+            // so those two columns have nothing meaningful to sort by; title
+            // and publish_date do.
+            const sortKey = videosState.sort;
+            const dir     = videosState.order === 'ASC' ? 1 : -1;
+            if (sortKey === 'title' || sortKey === 'publish_date') {
+                videos.sort((a, b) => {
+                    const av = a[sortKey] || '';
+                    const bv = b[sortKey] || '';
+                    return av < bv ? -dir : av > bv ? dir : 0;
+                });
+            }
 
             videosTotal = videos.length; // approximate
 
@@ -634,7 +648,7 @@
 
             renderPagination();
         } catch (e) {
-            tbody.innerHTML = `<tr><td colspan="9" class="sas-empty">Error loading videos: ${esc(e.message)}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="8" class="sas-empty">Error loading videos: ${esc(e.message)}</td></tr>`;
         }
     }
 
@@ -910,49 +924,13 @@
     // Accounts
     // =========================================================================
     async function initAccounts() {
+        // Connecting an account now happens entirely in the Meavr dashboard
+        // (see admin/templates/accounts.php) — there's no local "Connect"
+        // button on this page to wire up anymore. The corresponding
+        // /oauth/*/url REST routes (SAS_API::youtube_oauth_url() etc.) and
+        // platform-service get_auth_url() methods still work correctly if
+        // ever called, but nothing in the current UI calls them.
         await loadAccounts();
-
-        document.getElementById('sas-connect-youtube')?.addEventListener('click', async (btn) => {
-            const el = btn.target || btn.currentTarget;
-            el.disabled = true;
-            el.textContent = sasData.strings.connecting;
-            try {
-                const { url } = await api.get('/oauth/youtube/url');
-                window.location.href = url;
-            } catch (e) {
-                toast.error(e.message);
-                el.disabled    = false;
-                el.textContent = 'Connect YouTube';
-            }
-        });
-
-        document.getElementById('sas-connect-instagram')?.addEventListener('click', async (btn) => {
-            const el = btn.target || btn.currentTarget;
-            el.disabled = true;
-            el.textContent = sasData.strings.connecting;
-            try {
-                const { url } = await api.get('/oauth/instagram/url');
-                window.location.href = url;
-            } catch (e) {
-                toast.error(e.message);
-                el.disabled    = false;
-                el.textContent = 'Connect Instagram';
-            }
-        });
-
-        document.getElementById('sas-connect-facebook')?.addEventListener('click', async (btn) => {
-            const el = btn.target || btn.currentTarget;
-            el.disabled = true;
-            el.textContent = sasData.strings.connecting;
-            try {
-                const { url } = await api.get('/oauth/facebook/url');
-                window.location.href = url;
-            } catch (e) {
-                toast.error(e.message);
-                el.disabled    = false;
-                el.textContent = 'Connect Facebook';
-            }
-        });
     }
 
     async function loadAccounts() {
@@ -1125,18 +1103,9 @@
                 weekdays:            [...document.querySelectorAll('input[name="weekdays[]"]:checked')].map(cb => cb.value),
                 default_description: document.getElementById('sas-default-description')?.value || '',
                 default_tags:        document.getElementById('sas-default-tags')?.value || '',
-                youtube_client_id:   document.getElementById('sas-yt-client-id')?.value || '',
                 youtube_category:    document.getElementById('sas-yt-category')?.value || '22',
                 youtube_privacy:     document.getElementById('sas-yt-privacy')?.value || 'public',
-                instagram_app_id:    document.getElementById('sas-ig-app-id')?.value || '',
-                instagram_config_id: document.getElementById('sas-ig-config-id')?.value || '',
             };
-
-            const ytSecret = document.getElementById('sas-yt-client-secret')?.value;
-            if (ytSecret) data.youtube_client_secret = ytSecret;
-
-            const igSecret = document.getElementById('sas-ig-app-secret')?.value;
-            if (igSecret) data.instagram_app_secret = igSecret;
 
             try {
                 await api.post('/settings', data);
@@ -1171,11 +1140,8 @@
 
             if (s.default_description) setVal('sas-default-description', s.default_description);
             if (s.default_tags)        setVal('sas-default-tags', s.default_tags);
-            if (s.youtube_client_id)   setVal('sas-yt-client-id', s.youtube_client_id);
             if (s.youtube_category)    setVal('sas-yt-category', s.youtube_category);
             if (s.youtube_privacy)     setVal('sas-yt-privacy', s.youtube_privacy);
-            if (s.instagram_app_id)    setVal('sas-ig-app-id', s.instagram_app_id);
-            if (s.instagram_config_id) setVal('sas-ig-config-id', s.instagram_config_id);
         } catch (e) {
             console.error('Settings error', e);
         }
