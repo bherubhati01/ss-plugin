@@ -17,12 +17,10 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class SAS_Facebook_Service {
 
-	private SAS_Token_Service $token_service;
-	private SAS_Log_Service   $log_service;
+	private SAS_Log_Service $log_service;
 
 	public function __construct() {
-		$this->token_service = new SAS_Token_Service();
-		$this->log_service   = new SAS_Log_Service();
+		$this->log_service = new SAS_Log_Service();
 	}
 
 	// ── OAuth: Step 1 — get the authorize URL from backend ───────────────────

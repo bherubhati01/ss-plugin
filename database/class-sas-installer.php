@@ -10,13 +10,16 @@ class SAS_Installer {
         $charset_collate = $wpdb->get_charset_collate();
         require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
 
+        // sas_accounts, sas_videos, sas_queue, and sas_platforms are
+        // deliberately NOT created for new installs — they belonged to an
+        // older architecture (plugin-managed accounts/local publish queue)
+        // that's since been fully replaced by the backend (see
+        // SAS_Upload_Service, SAS_Cron); nothing writes to or reads from
+        // them anymore. Still dropped in uninstall() below so upgrading
+        // from an older version that did create them still cleans up fully.
         $tables = [
-            self::get_accounts_table_sql($wpdb, $charset_collate),
-            self::get_videos_table_sql($wpdb, $charset_collate),
             self::get_logs_table_sql($wpdb, $charset_collate),
-            self::get_queue_table_sql($wpdb, $charset_collate),
             self::get_settings_table_sql($wpdb, $charset_collate),
-            self::get_platforms_table_sql($wpdb, $charset_collate),
         ];
 
         foreach ($tables as $sql) {
@@ -24,55 +27,6 @@ class SAS_Installer {
         }
 
         update_option('sas_version', SAS_VERSION);
-    }
-
-    private static function get_accounts_table_sql($wpdb, $charset_collate) {
-        $table_name = $wpdb->prefix . 'sas_accounts';
-        return "CREATE TABLE IF NOT EXISTS $table_name (
-            id bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT,
-            platform varchar(50) NOT NULL,
-            user_id bigint(20) UNSIGNED NOT NULL,
-            account_name varchar(255) NOT NULL,
-            access_token text,
-            refresh_token text,
-            token_expires_at datetime,
-            metadata longtext,
-            created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            updated_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            PRIMARY KEY  (id),
-            KEY idx_platform (platform),
-            KEY idx_user_id (user_id)
-        ) $charset_collate;";
-    }
-
-    private static function get_videos_table_sql($wpdb, $charset_collate) {
-        $table_name = $wpdb->prefix . 'sas_videos';
-        return "CREATE TABLE IF NOT EXISTS $table_name (
-            id bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT,
-            user_id bigint(20) UNSIGNED NOT NULL,
-            file_path varchar(500) NOT NULL,
-            file_url varchar(500) NOT NULL,
-            thumbnail_url varchar(500),
-            title varchar(255) NOT NULL,
-            description text,
-            tags text,
-            duration int(11) UNSIGNED,
-            file_size bigint(20) UNSIGNED,
-            platform varchar(50) NOT NULL,
-            account_id bigint(20) UNSIGNED,
-            status varchar(50) NOT NULL DEFAULT 'draft',
-            publish_date datetime,
-            published_at datetime,
-            error_message text,
-            metadata longtext,
-            created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            updated_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            PRIMARY KEY  (id),
-            KEY idx_user_id (user_id),
-            KEY idx_status (status),
-            KEY idx_publish_date (publish_date),
-            KEY idx_platform (platform)
-        ) $charset_collate;";
     }
 
     private static function get_logs_table_sql($wpdb, $charset_collate) {
@@ -93,26 +47,6 @@ class SAS_Installer {
         ) $charset_collate;";
     }
 
-    private static function get_queue_table_sql($wpdb, $charset_collate) {
-        $table_name = $wpdb->prefix . 'sas_queue';
-        return "CREATE TABLE IF NOT EXISTS $table_name (
-            id bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT,
-            video_id bigint(20) UNSIGNED NOT NULL,
-            status varchar(50) NOT NULL DEFAULT 'queued',
-            attempts int(11) UNSIGNED NOT NULL DEFAULT 0,
-            last_attempt_at datetime,
-            next_attempt_at datetime,
-            lock_key varchar(100),
-            lock_expires_at datetime,
-            created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            updated_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            PRIMARY KEY  (id),
-            KEY idx_video_id (video_id),
-            KEY idx_status (status),
-            KEY idx_next_attempt_at (next_attempt_at)
-        ) $charset_collate;";
-    }
-
     private static function get_settings_table_sql($wpdb, $charset_collate) {
         $table_name = $wpdb->prefix . 'sas_settings';
         return "CREATE TABLE IF NOT EXISTS $table_name (
@@ -124,21 +58,6 @@ class SAS_Installer {
             updated_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             PRIMARY KEY  (id),
             UNIQUE KEY idx_user_key (user_id, setting_key)
-        ) $charset_collate;";
-    }
-
-    private static function get_platforms_table_sql($wpdb, $charset_collate) {
-        $table_name = $wpdb->prefix . 'sas_platforms';
-        return "CREATE TABLE IF NOT EXISTS $table_name (
-            id bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT,
-            name varchar(50) NOT NULL,
-            label varchar(255) NOT NULL,
-            enabled tinyint(1) NOT NULL DEFAULT 1,
-            config longtext,
-            created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            updated_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            PRIMARY KEY  (id),
-            UNIQUE KEY idx_name (name)
         ) $charset_collate;";
     }
 

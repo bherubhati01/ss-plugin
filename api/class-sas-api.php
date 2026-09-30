@@ -597,14 +597,12 @@ class SAS_API {
     public function get_accounts(): WP_REST_Response {
         // Accounts are connected from the frontend dashboard and stored in the
         // backend — the backend is the source of truth for this website.
+        // There's no meaningful local fallback if it's unreachable (the old
+        // wp_sas_accounts table this used to fall back to is never written
+        // to under the current architecture — see SAS_Upload_Service), so
+        // this degrades to an empty list rather than a fake success.
         $result = SAS_Backend_Client::get('/api/v1/social-accounts/plugin/');
-        if (!is_wp_error($result) && is_array($result)) {
-            return new WP_REST_Response(array_values($result), 200);
-        }
-        // Offline fallback: any legacy locally-stored accounts.
-        $service  = new SAS_Token_Service();
-        $accounts = $service->get_all_accounts();
-        return new WP_REST_Response($accounts, 200);
+        return new WP_REST_Response(!is_wp_error($result) && is_array($result) ? array_values($result) : [], 200);
     }
 
     public function delete_account(WP_REST_Request $request): WP_REST_Response|WP_Error {

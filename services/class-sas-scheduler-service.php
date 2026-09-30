@@ -94,39 +94,6 @@ class SAS_Scheduler_Service {
         );
     }
 
-    /**
-     * Schedule a video: looks up its platform from the DB, finds the next
-     * available slot for that platform, and writes the publish_date.
-     */
-    public function schedule_video($video_id, $user_id = null): DateTime {
-        global $wpdb;
-
-        if (is_null($user_id)) {
-            $user_id = get_current_user_id();
-        }
-
-        $table    = $wpdb->prefix . 'sas_videos';
-        $platform = (string) $wpdb->get_var($wpdb->prepare(
-            "SELECT platform FROM $table WHERE id = %d AND user_id = %d",
-            $video_id, $user_id
-        ));
-
-        $next_date = $this->get_next_available_date($user_id, $platform);
-
-        $wpdb->update(
-            $table,
-            [
-                'status'       => 'scheduled',
-                'publish_date' => $next_date->format('Y-m-d H:i:s'),
-            ],
-            ['id' => $video_id, 'user_id' => $user_id],
-            ['%s', '%s'],
-            ['%d', '%d']
-        );
-
-        return $next_date;
-    }
-
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
