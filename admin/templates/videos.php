@@ -6,69 +6,10 @@ if (!defined('ABSPATH')) {
 <div class="sas-wrap" data-page="videos">
     <div class="sas-page-header">
         <h1><?php esc_html_e('Videos', 'social-auto-scheduler'); ?></h1>
-        <button class="sas-btn sas-btn--primary" id="sas-upload-btn-videos">
+        <button type="button" class="sas-btn sas-btn--primary sas-upload-trigger">
             <span class="dashicons dashicons-upload"></span>
             <?php esc_html_e('Upload Videos', 'social-auto-scheduler'); ?>
         </button>
-    </div>
-
-    <!-- Upload area (hidden by default) -->
-    <div class="sas-card" id="sas-upload-panel" style="display:none;">
-        <div class="sas-card__body">
-            <!-- Post type selector -->
-            <div class="sas-platform-selector" id="sas-content-type-selector-videos">
-                <span class="sas-platform-selector__label"><?php esc_html_e('Post type:', 'social-auto-scheduler'); ?></span>
-                <label class="sas-platform-toggle">
-                    <input type="radio" class="sas-upload-content-type" name="content_type" value="reel" checked />
-                    <span class="sas-platform-toggle__inner sas-platform-toggle__inner--reel">
-                        <?php esc_html_e('Reel / Video', 'social-auto-scheduler'); ?>
-                    </span>
-                </label>
-                <label class="sas-platform-toggle">
-                    <input type="radio" class="sas-upload-content-type" name="content_type" value="story" />
-                    <span class="sas-platform-toggle__inner sas-platform-toggle__inner--story">
-                        <?php esc_html_e('Story', 'social-auto-scheduler'); ?>
-                    </span>
-                </label>
-                <span class="sas-field__help" id="sas-content-type-help-videos" style="display:none;flex-basis:100%;">
-                    <?php esc_html_e('Stories can only publish to Instagram, and publish without a caption.', 'social-auto-scheduler'); ?>
-                </span>
-            </div>
-
-            <!-- Platform selector -->
-            <div class="sas-platform-selector" id="sas-platform-selector-videos">
-                <span class="sas-platform-selector__label"><?php esc_html_e('Publish to:', 'social-auto-scheduler'); ?></span>
-                <label class="sas-platform-toggle" id="sas-platform-toggle-youtube-videos">
-                    <input type="checkbox" class="sas-upload-platform" name="platforms[]" value="youtube" checked />
-                    <span class="sas-platform-toggle__inner sas-platform-toggle__inner--youtube">
-                        <img src="<?php echo esc_url( SAS_PLUGIN_URL . 'assets/images/youtube.svg' ); ?>" width="16" height="16" alt="" style="vertical-align:middle;object-fit:contain;">
-                        YouTube
-                    </span>
-                </label>
-                <label class="sas-platform-toggle">
-                    <input type="checkbox" class="sas-upload-platform" name="platforms[]" value="instagram" />
-                    <span class="sas-platform-toggle__inner sas-platform-toggle__inner--instagram">
-                        <img src="<?php echo esc_url( SAS_PLUGIN_URL . 'assets/images/instagram.svg' ); ?>" width="16" height="16" alt="" style="vertical-align:middle;object-fit:contain;">
-                        Instagram
-                    </span>
-                </label>
-                <label class="sas-platform-toggle">
-                    <input type="checkbox" class="sas-upload-platform" name="platforms[]" value="facebook" />
-                    <span class="sas-platform-toggle__inner sas-platform-toggle__inner--facebook">
-                        <img src="<?php echo esc_url( SAS_PLUGIN_URL . 'assets/images/facebook.svg' ); ?>" width="16" height="16" alt="" style="vertical-align:middle;object-fit:contain;">
-                        Facebook
-                    </span>
-                </label>
-            </div>
-
-            <div id="sas-upload-area-videos" class="sas-upload-area">
-                <div class="sas-upload-area__icon"><span class="dashicons dashicons-cloud-upload"></span></div>
-                <p class="sas-upload-area__title"><?php esc_html_e('Drop videos here or click to browse', 'social-auto-scheduler'); ?></p>
-                <p class="sas-upload-area__hint"><?php esc_html_e('MP4, MOV — max 5 GB each', 'social-auto-scheduler'); ?></p>
-                <input type="file" id="sas-file-input-videos" accept="video/mp4,video/quicktime,.mp4,.mov" multiple hidden />
-            </div>
-            <div id="sas-upload-list-videos" class="sas-upload-list"></div>
-        </div>
     </div>
 
     <!-- Filters & Bulk Actions -->
@@ -111,17 +52,16 @@ if (!defined('ABSPATH')) {
                     <thead>
                         <tr>
                             <th class="sas-col-check"><input type="checkbox" id="sas-select-all" /></th>
-                            <th class="sas-col-title sas-sortable" data-sort="title"><?php esc_html_e('Title', 'social-auto-scheduler'); ?></th>
-                            <th><?php esc_html_e('Platform', 'social-auto-scheduler'); ?></th>
+                            <th class="sas-col-title"><?php esc_html_e('Video', 'social-auto-scheduler'); ?></th>
+                            <th><?php esc_html_e('Destination', 'social-auto-scheduler'); ?></th>
                             <th><?php esc_html_e('Status', 'social-auto-scheduler'); ?></th>
-                            <th class="sas-sortable" data-sort="publish_date"><?php esc_html_e('Publish Date', 'social-auto-scheduler'); ?></th>
-                            <th class="sas-sortable" data-sort="duration"><?php esc_html_e('Duration', 'social-auto-scheduler'); ?></th>
-                            <th class="sas-sortable" data-sort="file_size"><?php esc_html_e('Size', 'social-auto-scheduler'); ?></th>
+                            <th><?php esc_html_e('Scheduled', 'social-auto-scheduler'); ?></th>
+                            <th><?php esc_html_e('Created', 'social-auto-scheduler'); ?></th>
                             <th style="min-width:200px"><?php esc_html_e('Actions', 'social-auto-scheduler'); ?></th>
                         </tr>
                     </thead>
                     <tbody id="sas-videos-table-body">
-                        <tr><td colspan="8" class="sas-table__loading"><div class="sas-loading-skeleton"></div></td></tr>
+                        <tr><td colspan="7" class="sas-table__loading"><div class="sas-loading-skeleton"></div></td></tr>
                     </tbody>
                 </table>
             </div>
@@ -173,3 +113,5 @@ if (!defined('ABSPATH')) {
         </div>
     </div>
 </div>
+
+<?php require SAS_PLUGIN_DIR . 'admin/templates/partials/upload-wizard-modal.php'; ?>

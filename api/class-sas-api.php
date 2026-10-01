@@ -14,7 +14,6 @@ class SAS_API {
             ['methods' => 'POST', 'callback' => [$this, 'create_video'], 'permission_callback' => [$this, 'auth']],
         ]);
         register_rest_route($ns, '/videos/(?P<id>\d+)', [
-            ['methods' => 'GET',    'callback' => [$this, 'get_video'],    'permission_callback' => [$this, 'auth']],
             ['methods' => 'PUT',    'callback' => [$this, 'update_video'], 'permission_callback' => [$this, 'auth']],
             ['methods' => 'DELETE', 'callback' => [$this, 'delete_video'], 'permission_callback' => [$this, 'auth']],
         ]);
@@ -123,41 +122,67 @@ class SAS_API {
     // shape assets/js/admin.js expects (title/publish_date/thumbnail_url/...).
 
     /**
-     * Convert a backend VideoSerializer object into the local admin.js shape.
+     * Convert a backend VideoTargetRowSerializer object (one row per publish
+     * destination — see VideoTargetListView) into the shape assets/js/admin.js
+     * expects. Mirrors exactly what the dashboard's own Video Upload list
+     * shows: one row per platform/account a video targets, not one row per
+     * Video — a video sent to 2 platforms is 2 rows here, same as there.
      */
-    private static function map_backend_video(array $v): array {
-        $publish_date = '';
-        if (!empty($v['scheduled_at'])) {
-            try {
-                $dt = new DateTime($v['scheduled_at']);
-                $dt->setTimezone(wp_timezone());
-                $publish_date = $dt->format('Y-m-d H:i:s');
-            } catch (Exception $e) {
-                $publish_date = '';
-            }
-        }
-        $platforms    = $v['platforms'] ?? ($v['platform'] ? [$v['platform']] : []);
-        $content_type = $v['content_type'] ?? 'reel';
+    private static function map_backend_target(array $t): array {
+        $content_type = $t['content_type'] ?? 'reel';
+        $title = $t['caption'] ?: (
+            'story' === $content_type
+                ? __('Instagram Story', 'social-auto-scheduler')
+                : __('Untitled video', 'social-auto-scheduler')
+        );
 
         return [
-            'id'            => $v['id'],
-            'title'         => $v['caption'] ?: (
-                'story' === $content_type
-                    ? __('Instagram Story', 'social-auto-scheduler')
-                    : __('Untitled video', 'social-auto-scheduler')
-            ),
-            'description'   => $v['description'] ?? '',
-            'tags'          => wp_json_encode($v['tags'] ?? []),
-            'platform'      => $platforms[0] ?? 'youtube',
-            'platforms'     => $platforms,
-            'content_type'  => $content_type,
-            'status'        => $v['status'] ?? 'draft',
-            'publish_date'  => $publish_date,
-            'thumbnail_url' => $v['thumbnail_url'] ?? '',
-            'duration'      => 0,   // not tracked backend-side (no local file)
-            'file_size'     => 0,   // not tracked backend-side (no local file)
-            'error_message' => $v['error_message'] ?? '',
+            'id'             => $t['id'],       // this target row's own id
+            'video_id'       => $t['video_id'], // parent Video id — action endpoints operate on this
+            'title'          => $title,
+            'description'    => $t['description'] ?? '',
+            'tags'           => wp_json_encode($t['tags'] ?? []),
+            'platform'       => $t['platform'] ?? 'youtube',
+            'platform_label' => $t['platform_label'] ?? ucfirst($t['platform'] ?? ''),
+            'account_name'   => $t['account_name'] ?? '',
+            'content_type'   => $content_type,
+            'status'         => $t['status'] ?? 'draft',
+            'publish_date'   => self::to_local_datetime($t['scheduled_at'] ?? null),
+            'created_at'     => self::to_local_datetime($t['created_at'] ?? null),
+            'thumbnail_url'  => $t['thumbnail_url'] ?? '',
+            'error_message'  => $t['error_message'] ?? '',
+            'can_retry'      => (bool) ($t['can_retry'] ?? false),
         ];
+    }
+
+    private static function to_local_datetime(?string $iso): string {
+        if (!$iso) {
+            return '';
+        }
+        try {
+            $dt = new DateTime($iso);
+            $dt->setTimezone(wp_timezone());
+            return $dt->format('Y-m-d H:i:s');
+        } catch (Exception $e) {
+            return '';
+        }
+    }
+
+    /**
+     * Inverse of to_local_datetime() — the upload wizard's schedule field
+     * sends a WP-local 'Y-m-d H:i:s' string (same convention as
+     * update_video()'s publish_date), convert it to ISO 8601 before it's
+     * stored/forwarded to the backend, which expects UTC-aware timestamps.
+     */
+    private static function local_datetime_to_iso(?string $local): ?string {
+        if (!$local) {
+            return null;
+        }
+        try {
+            return (new DateTime(sanitize_text_field($local), wp_timezone()))->format('c');
+        } catch (Exception $e) {
+            return null;
+        }
     }
 
     public function get_videos(WP_REST_Request $request): WP_REST_Response|WP_Error {
@@ -173,22 +198,13 @@ class SAS_API {
         ];
         $params = array_filter($params, fn($v) => $v !== '' && $v !== null);
 
-        $result = SAS_Backend_Client::get('/api/v1/videos/plugin/', $params);
+        $result = SAS_Backend_Client::get('/api/v1/videos/plugin/targets/', $params);
         if (is_wp_error($result)) {
             return $result;
         }
 
-        $items = array_map([self::class, 'map_backend_video'], $result['results'] ?? []);
+        $items = array_map([self::class, 'map_backend_target'], $result['results'] ?? []);
         return new WP_REST_Response($items, 200);
-    }
-
-    public function get_video(WP_REST_Request $request): WP_REST_Response|WP_Error {
-        $id     = absint($request->get_param('id'));
-        $result = SAS_Backend_Client::get("/api/v1/videos/plugin/{$id}/");
-        if (is_wp_error($result)) {
-            return new WP_Error('not_found', __('Video not found.', 'social-auto-scheduler'), ['status' => 404]);
-        }
-        return new WP_REST_Response(self::map_backend_video($result), 200);
     }
 
     public function create_video(WP_REST_Request $request): WP_REST_Response {
@@ -337,23 +353,30 @@ class SAS_API {
         try {
             $platforms    = SAS_Upload_Service::sanitize_platforms($raw_platforms);
             $content_type = SAS_Upload_Service::sanitize_content_type($request->get_param('content_type') ?? 'reel');
-            $service      = new SAS_Upload_Service();
+            $publish_now  = (bool) $request->get_param('publish_now');
+            $scheduled_at = $publish_now ? null : self::local_datetime_to_iso($request->get_param('scheduled_at'));
+            if (!$publish_now && !$scheduled_at) {
+                $scheduler    = new SAS_Scheduler_Service();
+                $scheduled_at = $scheduler->get_next_available_date(null, $platforms[0] ?? 'youtube')->format('c');
+            }
 
-            $scheduler = new SAS_Scheduler_Service();
-            $when      = $scheduler->get_next_available_date(null, $platforms[0] ?? 'youtube');
+            $service = new SAS_Upload_Service();
 
             // One backend video with a target per selected platform.
             $video = $service->upload_and_register($files['file'], [
                 'platforms'    => $platforms,
                 'content_type' => $content_type,
                 // Stories don't support captions — see SAS_Upload_Service::send_to_backend().
-                'caption'      => 'story' === $content_type ? '' : pathinfo($files['file']['name'], PATHINFO_FILENAME),
-                'scheduled_at' => $when->format('c'),
+                'caption'      => 'story' === $content_type ? '' : sanitize_text_field($request->get_param('caption') ?: pathinfo($files['file']['name'], PATHINFO_FILENAME)),
+                'description'  => sanitize_textarea_field($request->get_param('description') ?? ''),
+                'tags'         => SAS_Helpers::sanitize_tags($request->get_param('tags') ?? []),
+                'scheduled_at' => $scheduled_at,
+                'publish_now'  => $publish_now,
             ]);
 
             return new WP_REST_Response([
                 'videos' => [
-                    ['id' => $video['id'] ?? 0, 'publish_date' => $when->format('Y-m-d H:i:s')],
+                    ['id' => $video['id'] ?? 0, 'publish_date' => self::to_local_datetime($scheduled_at), 'publish_now' => $publish_now],
                 ],
             ], 201);
         } catch (\Throwable $e) {
@@ -362,7 +385,8 @@ class SAS_API {
     }
 
     public function upload_init(WP_REST_Request $request): WP_REST_Response|WP_Error {
-        $data = $request->get_json_params() ?? [];
+        $data        = $request->get_json_params() ?? [];
+        $publish_now = ! empty( $data['publish_now'] );
         try {
             $service = new SAS_Upload_Service();
             $result  = $service->init_upload([
@@ -370,6 +394,11 @@ class SAS_API {
                 'file_size'    => absint($data['file_size'] ?? 0),
                 'platforms'    => $data['platforms'] ?? $data['platform'] ?? 'youtube',
                 'content_type' => $data['content_type'] ?? 'reel',
+                'caption'      => $data['caption'] ?? '',
+                'description'  => $data['description'] ?? '',
+                'tags'         => $data['tags'] ?? [],
+                'scheduled_at' => $publish_now ? null : self::local_datetime_to_iso($data['scheduled_at'] ?? null),
+                'publish_now'  => $publish_now,
             ]);
             return new WP_REST_Response($result, 200);
         } catch (\Throwable $e) {

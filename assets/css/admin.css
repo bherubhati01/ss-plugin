@@ -657,6 +657,68 @@ body.sas-dark {
 .sas-upload-item__status--done  { color: var(--sas-success-text); }
 .sas-upload-item__status--error { color: var(--sas-danger-text); }
 
+.sas-upload-item__remove {
+    background: none;
+    border: none;
+    color: var(--sas-text-muted);
+    cursor: pointer;
+    padding: 2px;
+    line-height: 1;
+}
+.sas-upload-item__remove:hover { color: var(--sas-danger); }
+.sas-upload-item__remove .dashicons { font-size: 16px; width: 16px; height: 16px; }
+
+/* ============================================================
+   Upload wizard — step indicator
+   ============================================================ */
+.sas-modal__content--wide { max-width: 640px; }
+
+.sas-wizard-steps {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 18px;
+    font-size: 13px;
+    color: var(--sas-text-muted);
+}
+
+.sas-wizard-step { display: flex; align-items: center; gap: 8px; }
+
+.sas-wizard-step__dot {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    font-size: 11px;
+    font-weight: 700;
+    background: var(--sas-surface-2);
+    color: var(--sas-text-muted);
+    transition: background .2s ease, color .2s ease;
+}
+
+.sas-wizard-step.is-active .sas-wizard-step__dot {
+    background: var(--sas-primary);
+    color: #fff;
+}
+
+.sas-wizard-step.is-done .sas-wizard-step__dot {
+    background: var(--sas-primary-light);
+    color: var(--sas-primary);
+}
+
+.sas-wizard-step.is-active .sas-wizard-step__label {
+    color: var(--sas-text);
+    font-weight: 600;
+}
+
+.sas-wizard-step__divider {
+    width: 24px;
+    height: 1px;
+    background: var(--sas-border);
+}
+
 /* ============================================================
    Tables
    ============================================================ */
@@ -728,11 +790,12 @@ body.sas-dark {
 
 .sas-table__loading { text-align: center; padding: 40px; }
 
-.sas-sortable { cursor: pointer; user-select: none; }
-.sas-sortable:hover { color: var(--sas-primary); }
-.sas-sortable::after { content: " ↕"; opacity: .4; }
-.sas-sortable.sas-sort-asc::after  { content: " ↑"; opacity: 1; }
-.sas-sortable.sas-sort-desc::after { content: " ↓"; opacity: 1; }
+.sas-destination__account {
+    display: block;
+    font-size: 11px;
+    color: var(--sas-text-muted);
+    margin-top: 2px;
+}
 
 /* ============================================================
    Badges / Status

@@ -16,10 +16,12 @@ class SAS_Admin {
             'manage_options',
             'social-auto-scheduler',
             [$this, 'render_dashboard'],
-            // ?ver=SAS_VERSION busts the browser/proxy cache automatically
-            // whenever the plugin version bumps, same as the enqueued CSS/JS
-            // below — no manual cache purge needed when the logo changes.
-            esc_url( SAS_PLUGIN_URL . 'assets/images/meavr-logo.png?ver=' . SAS_VERSION ),
+            // A plain dashicon instead of the Meavr logo — the logo rendered
+            // as an oversized, off-brand icon in the admin menu rail (WP
+            // scales/masks menu icons to a plain silhouette, so a colorful
+            // logo loses its colors and just looks like a smudge next to
+            // every other plugin's simple glyph icon there).
+            'dashicons-video-alt3',
             30
         );
 

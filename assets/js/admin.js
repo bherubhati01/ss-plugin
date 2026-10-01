@@ -137,6 +137,11 @@
 
             toggles.forEach(toggle => {
                 const label = toggle.closest('.sas-platform-toggle');
+                // A toggle annotatePlatformToggles() hid has no connected
+                // account at all — leave it alone either way, it's never
+                // eligible regardless of content type.
+                if (label?.hidden) return;
+
                 const storyCapable = STORY_CAPABLE_PLATFORMS.includes(toggle.value);
                 if (isStory) {
                     if (!storyCapable) {
@@ -153,7 +158,7 @@
             });
 
             if (isStory && !toggles.some(t => STORY_CAPABLE_PLATFORMS.includes(t.value) && t.checked)) {
-                const first = toggles.find(t => STORY_CAPABLE_PLATFORMS.includes(t.value));
+                const first = toggles.find(t => STORY_CAPABLE_PLATFORMS.includes(t.value) && !t.closest('.sas-platform-toggle')?.hidden);
                 if (first) first.checked = true;
             }
         }
@@ -163,11 +168,15 @@
     }
 
     class ChunkedUploader {
-        constructor(file, platforms, contentType, accountId, onProgress, onComplete, onError) {
+        /**
+         * @param file File
+         * @param meta { platforms, content_type, caption, description, tags,
+         *               scheduled_at ('Y-m-d H:i:s', WP-local, or null),
+         *               publish_now }
+         */
+        constructor(file, meta, onProgress, onComplete, onError) {
             this.file        = file;
-            this.platforms   = Array.isArray(platforms) ? platforms : [platforms || 'youtube'];
-            this.contentType = contentType === 'story' ? 'story' : 'reel';
-            this.accountId   = accountId || 0;
+            this.meta        = meta;
             this.onProgress  = onProgress;
             this.onComplete  = onComplete;
             this.onError     = onError;
@@ -189,9 +198,14 @@
         async singleUpload() {
             const fd = new FormData();
             fd.append('file', this.file);
-            this.platforms.forEach(p => fd.append('platforms[]', p));
-            fd.append('content_type', this.contentType);
-            fd.append('account_id', this.accountId);
+            this.meta.platforms.forEach(p => fd.append('platforms[]', p));
+            fd.append('content_type', this.meta.content_type);
+            fd.append('account_id', 0);
+            fd.append('caption', this.meta.caption || '');
+            fd.append('description', this.meta.description || '');
+            (this.meta.tags || []).forEach(t => fd.append('tags[]', t));
+            if (this.meta.scheduled_at) fd.append('scheduled_at', this.meta.scheduled_at);
+            if (this.meta.publish_now)  fd.append('publish_now', '1');
 
             this.onProgress(50);
             const result = await api.postForm('/upload', fd);
@@ -204,12 +218,9 @@
             const total = Math.ceil(this.file.size / CHUNK_SIZE);
 
             const { upload_id } = await api.post('/upload/init', {
-                file_name:    this.file.name,
-                file_size:    this.file.size,
-                chunk_size:   CHUNK_SIZE,
-                platforms:    this.platforms,
-                content_type: this.contentType,
-                account_id:   this.accountId,
+                file_name: this.file.name,
+                file_size: this.file.size,
+                ...this.meta,
             });
             this.uploadId = upload_id;
 
@@ -238,92 +249,205 @@
     }
 
     // =========================================================================
-    // Upload UI builder
+    // Upload wizard — Content step (post type, destinations, file) then
+    // Details step (caption/description/tags, schedule, Publish Now/Schedule),
+    // same shape as the dashboard's own New Video dialog. One shared modal
+    // (admin/templates/partials/upload-wizard-modal.php) is included on both
+    // the Dashboard and Videos page; every ".sas-upload-trigger" button on
+    // the current page opens it. The real upload only starts once Publish
+    // Now/Schedule is clicked from the Details step — selecting a file in
+    // step 1 just previews it, it doesn't upload yet.
     // =========================================================================
+    let uploadSelectedFile = null;
 
-    /**
-     * @param areaId       - id of the drop-zone div
-     * @param fileInputId  - id of the hidden <input type="file">
-     * @param listId       - id of the upload progress list container
-     * @param selectorEl   - DOM element containing .sas-upload-platform checkboxes
-     *                       (pass null to auto-detect within the same card)
-     */
-    function initUploadArea(areaId, fileInputId, listId, selectorEl) {
-        const area      = document.getElementById(areaId);
-        const fileInput = document.getElementById(fileInputId);
-        const list      = document.getElementById(listId);
-        if (!area || !fileInput) return;
+    function initUploadWizard() {
+        const modal = document.getElementById('sas-upload-modal');
+        if (!modal) return;
 
-        const card = selectorEl ? selectorEl.closest('.sas-card') : area.closest('.sas-card');
-        if (card) wireContentTypeLock(card);
+        const contentPanel  = modal.querySelector('[data-panel="content"]');
+        const detailsPanel  = modal.querySelector('[data-panel="details"]');
+        const stepContentEl = modal.querySelector('.sas-wizard-step[data-step="content"]');
+        const stepDetailsEl = modal.querySelector('.sas-wizard-step[data-step="details"]');
 
-        area.addEventListener('click', () => fileInput.click());
-        fileInput.addEventListener('change', e => handleFiles(e.target.files));
+        const backBtn       = document.getElementById('sas-upload-back');
+        const nextBtn        = document.getElementById('sas-upload-next');
+        const publishNowBtn  = document.getElementById('sas-upload-publish-now');
+        const scheduleBtn    = document.getElementById('sas-upload-schedule-btn');
+        const cancelBtn      = document.getElementById('sas-upload-cancel');
+        const closeBtn       = document.getElementById('sas-upload-modal-close');
+        const backdrop       = modal.querySelector('.sas-modal__backdrop');
 
-        area.addEventListener('dragover', e => { e.preventDefault(); area.classList.add('sas-drag-over'); });
-        area.addEventListener('dragleave', ()  => area.classList.remove('sas-drag-over'));
-        area.addEventListener('drop', e => {
-            e.preventDefault();
-            area.classList.remove('sas-drag-over');
-            handleFiles(e.dataTransfer.files);
-        });
+        const area            = document.getElementById('sas-upload-area');
+        const fileInput        = document.getElementById('sas-file-input');
+        const preview           = document.getElementById('sas-upload-file-preview');
+        const progressWrap      = document.getElementById('sas-upload-progress-wrap');
+        const accountsError     = document.getElementById('sas-upload-accounts-error');
+        const captionEl          = document.getElementById('sas-upload-caption');
+        const descriptionEl      = document.getElementById('sas-upload-description');
+        const tagsEl              = document.getElementById('sas-upload-tags');
+        const scheduleInputEl      = document.getElementById('sas-upload-schedule');
 
-        async function handleFiles(files) {
-            for (const file of Array.from(files)) {
-                const allowed = ['video/mp4', 'video/quicktime'];
-                if (!allowed.includes(file.type) && !file.name.match(/\.(mp4|mov)$/i)) {
-                    toast.error(`${file.name}: only MP4 and MOV allowed`);
-                    continue;
-                }
-                const scope = selectorEl || area.closest('.sas-card');
-                const contentType = getSelectedContentType(scope);
-                // Validate at least one platform is selected
-                const platforms = getSelectedPlatforms(scope);
-                if (!platforms.length) {
-                    toast.error(
-                        contentType === 'story'
-                            ? 'Please connect an Instagram account to upload Stories.'
-                            : 'Please select at least one platform (YouTube, Instagram, or Facebook).'
-                    );
-                    return;
-                }
-                await uploadFile(file, platforms, contentType);
+        wireContentTypeLock(modal);
+
+        document.querySelectorAll('.sas-upload-trigger').forEach(btn =>
+            btn.addEventListener('click', openModal)
+        );
+
+        const allButtons = [nextBtn, backBtn, publishNowBtn, scheduleBtn, cancelBtn, closeBtn];
+
+        function openModal() {
+            resetWizard();
+            modal.hidden = false;
+        }
+
+        function closeModal() {
+            modal.hidden = true;
+        }
+
+        closeBtn?.addEventListener('click', closeModal);
+        backdrop?.addEventListener('click', closeModal);
+        cancelBtn?.addEventListener('click', closeModal);
+
+        function resetWizard() {
+            uploadSelectedFile = null;
+            preview.style.display = 'none';
+            preview.innerHTML = '';
+            progressWrap.style.display = 'none';
+            progressWrap.innerHTML = '';
+            accountsError.style.display = 'none';
+            captionEl.value = '';
+            descriptionEl.value = '';
+            tagsEl.value = '';
+            scheduleInputEl.value = '';
+            allButtons.forEach(b => { if (b) b.disabled = false; });
+            showStep('content');
+        }
+
+        function showStep(step) {
+            contentPanel.hidden = step !== 'content';
+            detailsPanel.hidden = step !== 'details';
+            stepContentEl.classList.toggle('is-active', step === 'content');
+            stepContentEl.classList.toggle('is-done', step === 'details');
+            stepDetailsEl.classList.toggle('is-active', step === 'details');
+            backBtn.style.display       = step === 'details' ? '' : 'none';
+            nextBtn.style.display       = step === 'content' ? '' : 'none';
+            publishNowBtn.style.display = step === 'details' ? '' : 'none';
+            scheduleBtn.style.display   = step === 'details' ? '' : 'none';
+
+            if (step === 'details') {
+                const isStory = getSelectedContentType(modal) === 'story';
+                ['sas-upload-caption-field', 'sas-upload-description-field', 'sas-upload-tags-field'].forEach(id => {
+                    document.getElementById(id).style.display = isStory ? 'none' : '';
+                });
+                document.getElementById('sas-upload-story-note').style.display = isStory ? '' : 'none';
             }
         }
 
-        function uploadFile(file, platforms, contentType) {
-            const platformLabel = platforms.join(' + ');
-            const item          = createUploadItem(file.name, file.size, platformLabel);
-            if (list) list.appendChild(item.el);
+        area.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', e => setFile(e.target.files?.[0]));
+        area.addEventListener('dragover', e => { e.preventDefault(); area.classList.add('sas-drag-over'); });
+        area.addEventListener('dragleave', () => area.classList.remove('sas-drag-over'));
+        area.addEventListener('drop', e => {
+            e.preventDefault();
+            area.classList.remove('sas-drag-over');
+            setFile(e.dataTransfer.files?.[0]);
+        });
 
-            const accountId = 0; // Primary account per platform is resolved server-side
-
-            return new Promise(resolve => {
-                const uploader = new ChunkedUploader(
-                    file, platforms, contentType, accountId,
-                    pct => item.setProgress(pct),
-                    result => {
-                        // result.videos = [{id, publish_date}, ...]
-                        const videos = result.videos || [];
-                        const dates  = videos.map(v => formatDate(v.publish_date)).join(', ');
-                        item.setDone(dates ? `Scheduled: ${dates}` : 'Uploaded!');
-                        const count = videos.length;
-                        toast.success(
-                            count > 1
-                                ? `${file.name} uploaded — ${count} entries scheduled (${platformLabel})`
-                                : `${file.name} uploaded and scheduled!`
-                        );
-                        reloadCurrentPage();
-                        resolve(result);
-                    },
-                    msg => {
-                        item.setError(msg);
-                        toast.error(`Upload failed: ${msg}`);
-                        resolve(); // continue with next file even if this one failed
-                    }
-                );
-                uploader.start();
+        function setFile(file) {
+            if (!file) return;
+            const allowed = ['video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/webm'];
+            if (!allowed.includes(file.type) && !file.name.match(/\.(mp4|mov|avi|webm)$/i)) {
+                toast.error(`${file.name}: only MP4, MOV, AVI, or WEBM allowed`);
+                return;
+            }
+            uploadSelectedFile = file;
+            preview.style.display = '';
+            preview.innerHTML = `
+                <span class="sas-upload-item__name" title="${esc(file.name)}">${esc(file.name)}</span>
+                <span class="sas-upload-item__size">${formatBytes(file.size)}</span>
+                <button type="button" class="sas-upload-item__remove" id="sas-upload-remove-file" title="Remove">
+                    <span class="dashicons dashicons-no-alt"></span>
+                </button>
+            `;
+            document.getElementById('sas-upload-remove-file')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                uploadSelectedFile = null;
+                preview.style.display = 'none';
+                preview.innerHTML = '';
             });
+        }
+
+        nextBtn.addEventListener('click', () => {
+            if (!uploadSelectedFile) { toast.error('Select a video file to upload.'); return; }
+            const platforms = getSelectedPlatforms(modal);
+            if (!platforms.length) {
+                accountsError.textContent = getSelectedContentType(modal) === 'story'
+                    ? 'Connect an Instagram account to upload Stories.'
+                    : 'Select at least one platform to publish to.';
+                accountsError.style.display = '';
+                return;
+            }
+            accountsError.style.display = 'none';
+            showStep('details');
+        });
+
+        backBtn.addEventListener('click', () => showStep('content'));
+        publishNowBtn.addEventListener('click', () => submit(true));
+        scheduleBtn.addEventListener('click', () => submit(false));
+
+        function submit(publishNow) {
+            if (!uploadSelectedFile) { toast.error('Select a video file to upload.'); showStep('content'); return; }
+            const platforms = getSelectedPlatforms(modal);
+            if (!platforms.length) { showStep('content'); return; }
+
+            const scheduleVal = scheduleInputEl.value; // 'YYYY-MM-DDTHH:MM' (WP-local)
+            if (!publishNow && !scheduleVal) {
+                toast.error('Pick a date & time, or use Publish Now.');
+                return;
+            }
+
+            const contentType = getSelectedContentType(modal);
+            const isStory     = contentType === 'story';
+            const meta = {
+                platforms,
+                content_type: contentType,
+                caption:      isStory ? '' : captionEl.value.trim(),
+                description:  isStory ? '' : descriptionEl.value.trim(),
+                tags:         isStory ? [] : tagsEl.value.split(',').map(t => t.trim()).filter(Boolean),
+                // WP-local 'Y-m-d H:i:s' — same convention as the Edit Video
+                // modal's publish_date; SAS_API converts it to ISO using
+                // wp_timezone(), so no browser-timezone guessing here.
+                scheduled_at: publishNow || !scheduleVal ? null : scheduleVal.replace('T', ' ') + ':00',
+                publish_now:  publishNow,
+            };
+
+            allButtons.forEach(b => { if (b) b.disabled = true; });
+            progressWrap.style.display = '';
+            progressWrap.innerHTML = '';
+            const item = createUploadItem(uploadSelectedFile.name, uploadSelectedFile.size, platforms.join(' + '));
+            progressWrap.appendChild(item.el);
+
+            const uploader = new ChunkedUploader(
+                uploadSelectedFile, meta,
+                pct => item.setProgress(pct),
+                result => {
+                    const [v] = result.videos || [];
+                    item.setDone(publishNow ? 'Queued to publish now!' : (v?.publish_date ? `Scheduled: ${formatDate(v.publish_date)}` : 'Uploaded!'));
+                    toast.success(
+                        publishNow
+                            ? `${uploadSelectedFile.name} uploaded — queued for immediate publishing!`
+                            : `${uploadSelectedFile.name} uploaded and scheduled!`
+                    );
+                    reloadCurrentPage();
+                    setTimeout(closeModal, 700);
+                },
+                msg => {
+                    item.setError(msg);
+                    toast.error(`Upload failed: ${msg}`);
+                    allButtons.forEach(b => { if (b) b.disabled = false; });
+                }
+            );
+            uploader.start();
         }
     }
 
@@ -376,16 +500,7 @@
         await loadStats();
         await loadNextUpload();
         await loadRecentVideos();
-        initUploadArea(
-            'sas-upload-area',
-            'sas-file-input',
-            'sas-upload-list',
-            document.getElementById('sas-platform-selector-dash')
-        );
-
-        document.getElementById('sas-quick-upload-btn')?.addEventListener('click', () => {
-            document.getElementById('sas-file-input')?.click();
-        });
+        initUploadWizard();
     }
 
     async function loadStats() {
@@ -501,22 +616,12 @@
     // =========================================================================
     // Videos page
     // =========================================================================
-    const videosState = { page: 1, limit: 20, sort: 'created_at', order: 'DESC', search: '', status: '', platform: '' };
+    const videosState = { page: 1, limit: 20, search: '', status: '', platform: '' };
     let videosTotal = 0;
 
     async function initVideos() {
         await loadVideos();
-        initUploadArea(
-            'sas-upload-area-videos',
-            'sas-file-input-videos',
-            'sas-upload-list-videos',
-            document.getElementById('sas-platform-selector-videos')
-        );
-
-        document.getElementById('sas-upload-btn-videos')?.addEventListener('click', () => {
-            const panel = document.getElementById('sas-upload-panel');
-            if (panel) panel.style.display = panel.style.display === 'none' ? '' : 'none';
-        });
+        initUploadWizard();
 
         let searchTimer;
         document.getElementById('sas-search')?.addEventListener('input', e => {
@@ -546,21 +651,6 @@
 
         document.getElementById('sas-bulk-apply')?.addEventListener('click', bulkAction);
 
-        document.querySelectorAll('.sas-sortable').forEach(th => {
-            th.addEventListener('click', () => {
-                const col = th.dataset.sort;
-                if (videosState.sort === col) {
-                    videosState.order = videosState.order === 'ASC' ? 'DESC' : 'ASC';
-                } else {
-                    videosState.sort  = col;
-                    videosState.order = 'DESC';
-                }
-                document.querySelectorAll('.sas-sortable').forEach(h => h.classList.remove('sas-sort-asc','sas-sort-desc'));
-                th.classList.add(videosState.order === 'ASC' ? 'sas-sort-asc' : 'sas-sort-desc');
-                loadVideos();
-            });
-        });
-
         initVideoModal();
     }
 
@@ -568,10 +658,15 @@
         const tbody = document.getElementById('sas-videos-table-body');
         if (!tbody) return;
 
-        tbody.innerHTML = '<tr><td colspan="8" class="sas-table__loading"><div class="sas-loading-skeleton"></div></td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="sas-table__loading"><div class="sas-loading-skeleton"></div></td></tr>';
 
         try {
             const offset = (videosState.page - 1) * videosState.limit;
+            // One row per publish destination (SAS_API::get_videos() now
+            // proxies /api/v1/videos/plugin/targets/) — same granularity as
+            // the dashboard's own Video Upload list: a video sent to 2
+            // platforms is 2 rows here too, not 1. Already returned newest
+            // first by the backend, so no client-side sort needed.
             const videos = await api.get('/videos', {
                 search:   videosState.search,
                 status:   videosState.status,
@@ -580,54 +675,39 @@
                 offset,
             });
 
-            // SAS_API::get_videos() proxies the backend's plugin video list,
-            // which doesn't support an ordering param — sorting here,
-            // client-side, on the current page only. duration/file_size are
-            // always 0 (not tracked backend-side, see map_backend_video()),
-            // so those two columns have nothing meaningful to sort by; title
-            // and publish_date do.
-            const sortKey = videosState.sort;
-            const dir     = videosState.order === 'ASC' ? 1 : -1;
-            if (sortKey === 'title' || sortKey === 'publish_date') {
-                videos.sort((a, b) => {
-                    const av = a[sortKey] || '';
-                    const bv = b[sortKey] || '';
-                    return av < bv ? -dir : av > bv ? dir : 0;
-                });
-            }
-
             videosTotal = videos.length; // approximate
 
             if (!videos.length) {
-                tbody.innerHTML = '<tr><td colspan="8" class="sas-empty">No videos found.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="7" class="sas-empty">No videos found.</td></tr>';
                 document.getElementById('sas-pagination').innerHTML = '';
                 return;
             }
 
             tbody.innerHTML = videos.map(v => {
-                const date  = v.publish_date ? formatDate(v.publish_date) : '—';
-                const dur   = v.duration    ? formatDuration(Number(v.duration)) : '—';
-                const size  = v.file_size   ? formatBytes(Number(v.file_size))   : '—';
+                const scheduled = v.publish_date ? formatDate(v.publish_date) : '—';
+                const created   = v.created_at   ? formatDate(v.created_at)   : '—';
 
-                // Buttons shown per status
+                // Buttons shown per status — action endpoints operate on the
+                // parent Video, not this target row, so every button below
+                // uses v.video_id (not v.id, which is just this row's own
+                // target id).
                 const canSchedule    = v.status === 'draft';
                 const canPublishNow  = !['published', 'publishing', 'queued'].includes(v.status);
                 const actionBtns = [
-                    canSchedule   ? `<button class="sas-btn sas-btn--sm sas-btn--primary sas-schedule-btn" data-id="${esc(v.id)}">Schedule</button>` : '',
-                    canPublishNow ? `<button class="sas-btn sas-btn--sm sas-btn--publish-now sas-publish-now-btn" data-id="${esc(v.id)}" title="Publish immediately"><span class="dashicons dashicons-megaphone"></span> Now</button>` : '',
+                    canSchedule   ? `<button class="sas-btn sas-btn--sm sas-btn--primary sas-schedule-btn" data-id="${esc(v.video_id)}">Schedule</button>` : '',
+                    canPublishNow ? `<button class="sas-btn sas-btn--sm sas-btn--publish-now sas-publish-now-btn" data-id="${esc(v.video_id)}" title="Publish immediately"><span class="dashicons dashicons-megaphone"></span> Now</button>` : '',
                     `<button class="sas-btn sas-btn--sm sas-btn--secondary sas-edit-btn" data-video='${JSON.stringify(v).replace(/'/g, "&#39;")}'>Edit</button>`,
-                    `<button class="sas-btn sas-btn--sm sas-btn--ghost sas-delete-btn" data-id="${esc(v.id)}" title="Delete"><span class="dashicons dashicons-trash"></span></button>`,
+                    `<button class="sas-btn sas-btn--sm sas-btn--ghost sas-delete-btn" data-id="${esc(v.video_id)}" title="Delete"><span class="dashicons dashicons-trash"></span></button>`,
                 ].filter(Boolean).join('');
 
                 return `
-                <tr data-id="${esc(v.id)}">
-                    <td><input type="checkbox" class="sas-video-check" value="${esc(v.id)}" /></td>
+                <tr data-id="${esc(v.video_id)}">
+                    <td><input type="checkbox" class="sas-video-check" value="${esc(v.video_id)}" /></td>
                     <td><strong>${esc(v.title)}</strong> ${contentTypeBadge(v.content_type)}</td>
-                    <td>${platformBadge(v.platform)}</td>
+                    <td>${platformBadge(v.platform)}<span class="sas-destination__account">${esc(v.account_name)}</span></td>
                     <td>${statusBadge(v.status)}</td>
-                    <td>${esc(date)}</td>
-                    <td>${esc(dur)}</td>
-                    <td>${esc(size)}</td>
+                    <td>${esc(scheduled)}</td>
+                    <td>${esc(created)}</td>
                     <td><div class="sas-table__actions">${actionBtns}</div></td>
                 </tr>`;
             }).join('');
@@ -648,7 +728,7 @@
 
             renderPagination();
         } catch (e) {
-            tbody.innerHTML = `<tr><td colspan="8" class="sas-empty">Error loading videos: ${esc(e.message)}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="7" class="sas-empty">Error loading videos: ${esc(e.message)}</td></tr>`;
         }
     }
 
@@ -740,7 +820,7 @@
     }
 
     function openVideoModal(video) {
-        document.getElementById('sas-edit-id').value          = video.id;
+        document.getElementById('sas-edit-id').value          = video.video_id;
         document.getElementById('sas-edit-title').value       = video.title || '';
         document.getElementById('sas-edit-description').value = video.description || '';
 
@@ -1217,15 +1297,6 @@
         return (bytes / Math.pow(1024, i)).toFixed(1) + ' ' + units[Math.min(i, units.length - 1)];
     }
 
-    function formatDuration(sec) {
-        if (!sec) return '0:00';
-        const h = Math.floor(sec / 3600);
-        const m = Math.floor((sec % 3600) / 60);
-        const s = sec % 60;
-        if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-        return `${m}:${String(s).padStart(2,'0')}`;
-    }
-
     function formatDate(dateStr) {
         if (!dateStr) return '';
         return new Date(dateStr).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
@@ -1286,6 +1357,7 @@
                 const inner = label?.querySelector('.sas-platform-toggle__inner');
                 if (acc) {
                     input.disabled = false;
+                    if (label) label.hidden = false;
                     if (inner && !inner.querySelector('.sas-platform-toggle__account')) {
                         const s = document.createElement('span');
                         s.className = 'sas-platform-toggle__account';
@@ -1294,13 +1366,12 @@
                         inner.appendChild(s);
                     }
                 } else {
+                    // No connected account for this platform at all — hide the
+                    // option entirely rather than showing a disabled, grayed-
+                    // out toggle the user can't do anything with.
                     input.checked  = false;
                     input.disabled = true;
-                    if (label) {
-                        label.style.opacity = '.5';
-                        label.style.cursor  = 'not-allowed';
-                        label.title = 'Not connected — connect this account from your Meavr dashboard (Social Accounts).';
-                    }
+                    if (label) label.hidden = true;
                 }
             });
         } catch (e) {

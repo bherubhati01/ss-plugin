@@ -89,6 +89,14 @@ class SAS_Upload_Service {
 			'file_size'    => $file_size,
 			'platforms'    => self::sanitize_platforms( $args['platforms'] ?? [] ),
 			'content_type' => self::sanitize_content_type( $args['content_type'] ?? 'reel' ),
+			// Details-step fields (see admin.js's upload wizard) — carried
+			// through the chunked session to finalize_upload() since that's
+			// the only place the backend registration actually happens.
+			'caption'      => sanitize_text_field( $args['caption'] ?? '' ),
+			'description'  => sanitize_textarea_field( $args['description'] ?? '' ),
+			'tags'         => SAS_Helpers::sanitize_tags( $args['tags'] ?? [] ),
+			'scheduled_at' => $args['scheduled_at'] ?? null,
+			'publish_now'  => ! empty( $args['publish_now'] ),
 		], DAY_IN_SECONDS );
 
 		// Start with an empty part file.
@@ -172,34 +180,61 @@ class SAS_Upload_Service {
 		require_once ABSPATH . 'wp-admin/includes/media.php';
 		wp_update_attachment_metadata( (int) $attachment_id, wp_generate_attachment_metadata( (int) $attachment_id, $dest ) );
 
-		return $this->schedule_and_register(
-			(int) $attachment_id,
-			$session['platforms'],
-			$session['content_type'] ?? 'reel'
-		);
+		return $this->schedule_and_register( (int) $attachment_id, $session );
 	}
 
 	/**
-	 * Compute the next publish slot, register the attachment with the backend
-	 * (one video, one target per platform), and return the API response shape.
+	 * Register the attachment with the backend (one video, one target per
+	 * platform) using the caller-supplied caption/description/tags/schedule
+	 * from the upload wizard's Details step, and return the API response
+	 * shape. Falls back to the next available scheduler slot when neither
+	 * an explicit scheduled_at nor publish_now was given, preserving the
+	 * old auto-schedule behavior for any caller that still omits them.
+	 *
+	 * @param array $meta { platforms, content_type, caption, description,
+	 *                      tags, scheduled_at, publish_now }
 	 */
-	public function schedule_and_register( int $attachment_id, array $platforms, string $content_type = 'reel' ): array {
-		$scheduler = new SAS_Scheduler_Service();
-		$when      = $scheduler->get_next_available_date( null, $platforms[0] ?? 'youtube' );
+	public function schedule_and_register( int $attachment_id, array $meta ): array {
+		$platforms    = $meta['platforms'] ?? [ 'youtube' ];
+		$content_type = $meta['content_type'] ?? 'reel';
+		$publish_now  = ! empty( $meta['publish_now'] );
+
+		if ( $publish_now ) {
+			$scheduled_at = null;
+		} elseif ( ! empty( $meta['scheduled_at'] ) ) {
+			$scheduled_at = $meta['scheduled_at'];
+		} else {
+			$scheduler    = new SAS_Scheduler_Service();
+			$when         = $scheduler->get_next_available_date( null, $platforms[0] ?? 'youtube' );
+			$scheduled_at = $when->format( 'c' );
+		}
 
 		$video = $this->register_attachment( $attachment_id, [
 			'platforms'    => $platforms,
 			'content_type' => $content_type,
 			// Stories don't support captions — see send_to_backend().
-			'caption'      => 'story' === $content_type ? '' : get_the_title( $attachment_id ),
-			'scheduled_at' => $when->format( 'c' ),
+			'caption'      => 'story' === $content_type ? '' : ( ( $meta['caption'] ?? '' ) ?: get_the_title( $attachment_id ) ),
+			'description'  => $meta['description'] ?? '',
+			'tags'         => $meta['tags'] ?? [],
+			'scheduled_at' => $scheduled_at,
+			'publish_now'  => $publish_now,
 		] );
+
+		$publish_date = '';
+		if ( $scheduled_at ) {
+			try {
+				$publish_date = ( new DateTime( $scheduled_at ) )->setTimezone( wp_timezone() )->format( 'Y-m-d H:i:s' );
+			} catch ( Exception $e ) {
+				$publish_date = '';
+			}
+		}
 
 		return [
 			'videos' => [
 				[
 					'id'           => $video['id'] ?? 0,
-					'publish_date' => $when->format( 'Y-m-d H:i:s' ),
+					'publish_date' => $publish_date,
+					'publish_now'  => $publish_now,
 				],
 			],
 		];
@@ -306,10 +341,9 @@ class SAS_Upload_Service {
 		}
 
 		// "Default Description"/"Default Tags" (Settings → Default Video
-		// Settings) only ever applied if the caller left these blank — the
-		// Quick Upload flow never collects a description/tags at all, so
-		// without this fallback those two settings were saved but silently
-		// never used for anything.
+		// Settings) fill in only if the upload wizard's Details step was
+		// left blank for these — lets the saved defaults still do something
+		// useful without overriding what the user actually typed.
 		$settings    = new SAS_Settings_Service();
 		$description = sanitize_textarea_field( $meta['description'] ?? '' );
 		if ( '' === $description ) {
@@ -339,6 +373,7 @@ class SAS_Upload_Service {
 			'content_type'     => $content_type,
 			'platforms'        => $platforms ?: [ 'story' === $content_type ? 'instagram' : 'youtube' ],
 			'scheduled_at'     => $meta['scheduled_at'] ?? null,
+			'publish_now'      => ! empty( $meta['publish_now'] ),
 			'metadata'         => $metadata,
 			// So the backend knows to offer this video for the 48h-after-publish
 			// Media Library cleanup sweep — see cron/class-sas-cron.php.
