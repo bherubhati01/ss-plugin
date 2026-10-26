@@ -27,6 +27,7 @@
         },
         post(ep, data)   { return this.request(ep, { method: 'POST',   body: JSON.stringify(data) }); },
         put(ep, data)    { return this.request(ep, { method: 'PUT',    body: JSON.stringify(data) }); },
+        patch(ep, data)  { return this.request(ep, { method: 'PATCH',  body: JSON.stringify(data) }); },
         del(ep)          { return this.request(ep, { method: 'DELETE' }); },
         postForm(ep, fd) { return this.request(ep, { method: 'POST',   body: fd }); },
     };
@@ -114,14 +115,29 @@
     // them for now (mirrors the backend's VideoService._resolve_accounts).
     // Add 'facebook' back once that's fixed.
     const STORY_CAPABLE_PLATFORMS = ['instagram'];
+    // Photo posts have no YouTube equivalent at all (YouTube's API has no
+    // photo-posting capability, full stop) — mirrors the backend's
+    // VideoService._resolve_accounts PHOTO branch.
+    const PHOTO_CAPABLE_PLATFORMS = ['instagram', 'facebook'];
+
+    const CONTENT_TYPE_HELP_TEXT = {
+        story: 'Stories can only publish to Instagram, and publish without a caption.',
+        photo: 'Photo posts can only publish to Instagram or Facebook — YouTube has no photo-posting capability.',
+    };
+
+    function capablePlatformsFor(contentType) {
+        if (contentType === 'story') return STORY_CAPABLE_PLATFORMS;
+        if (contentType === 'photo') return PHOTO_CAPABLE_PLATFORMS;
+        return null; // reel/video — every connected platform is eligible
+    }
 
     /**
-     * When the content-type radios switch to 'story', disable + uncheck
-     * any non-Story-capable platform toggle (and restore it when switching
-     * back to Reel/Video) so the upload can never target a platform with
-     * an unsupported post type. If switching to Story leaves nothing
-     * checked, auto-check the first Story-capable toggle rather than
-     * silently leaving the upload targeting zero accounts.
+     * When the content-type radios switch to 'story' or 'photo', disable +
+     * uncheck any platform toggle that post type can't publish to (and
+     * restore it when switching back to Reel/Video) so the upload can
+     * never target a platform with an unsupported post type. If switching
+     * leaves nothing checked, auto-check the first eligible toggle rather
+     * than silently leaving the upload targeting zero accounts.
      */
     function wireContentTypeLock(cardEl) {
         const contentTypeRadios = [...cardEl.querySelectorAll('.sas-upload-content-type')];
@@ -132,8 +148,12 @@
         const wasChecked = new Map(toggles.map(t => [t.value, t.checked]));
 
         function apply() {
-            const isStory = getSelectedContentType(cardEl) === 'story';
-            if (help) help.style.display = isStory ? '' : 'none';
+            const contentType = getSelectedContentType(cardEl);
+            const capable      = capablePlatformsFor(contentType);
+            if (help) {
+                help.textContent = CONTENT_TYPE_HELP_TEXT[contentType] || '';
+                help.style.display = capable ? '' : 'none';
+            }
 
             toggles.forEach(toggle => {
                 const label = toggle.closest('.sas-platform-toggle');
@@ -142,14 +162,12 @@
                 // eligible regardless of content type.
                 if (label?.hidden) return;
 
-                const storyCapable = STORY_CAPABLE_PLATFORMS.includes(toggle.value);
-                if (isStory) {
-                    if (!storyCapable) {
-                        wasChecked.set(toggle.value, toggle.checked);
-                        toggle.checked = false;
-                        toggle.disabled = true;
-                        if (label) label.classList.add('sas-platform-toggle--disabled');
-                    }
+                const eligible = !capable || capable.includes(toggle.value);
+                if (!eligible) {
+                    wasChecked.set(toggle.value, toggle.checked);
+                    toggle.checked = false;
+                    toggle.disabled = true;
+                    if (label) label.classList.add('sas-platform-toggle--disabled');
                 } else {
                     toggle.disabled = false;
                     if (label) label.classList.remove('sas-platform-toggle--disabled');
@@ -157,8 +175,8 @@
                 }
             });
 
-            if (isStory && !toggles.some(t => STORY_CAPABLE_PLATFORMS.includes(t.value) && t.checked)) {
-                const first = toggles.find(t => STORY_CAPABLE_PLATFORMS.includes(t.value) && !t.closest('.sas-platform-toggle')?.hidden);
+            if (capable && !toggles.some(t => capable.includes(t.value) && t.checked)) {
+                const first = toggles.find(t => capable.includes(t.value) && !t.closest('.sas-platform-toggle')?.hidden);
                 if (first) first.checked = true;
             }
         }
@@ -248,6 +266,51 @@
         cancel() { this.cancelled = true; }
     }
 
+    /**
+     * Uploads 1-10 images in a single multipart request and registers them
+     * as one photo/carousel post. Images are small enough (25 MB ceiling
+     * each, enforced server-side too) that chunking isn't needed — unlike
+     * ChunkedUploader there's no real progress to report mid-flight, so
+     * this jumps to 50% before the request and 100% after, same simplified
+     * convention ChunkedUploader.singleUpload() already uses for one file.
+     */
+    class PhotoUploader {
+        /**
+         * @param files File[]
+         * @param meta  { platforms, caption, description, tags, scheduled_at, publish_now }
+         */
+        constructor(files, meta, onProgress, onComplete, onError) {
+            this.files       = files;
+            this.meta        = meta;
+            this.onProgress  = onProgress;
+            this.onComplete  = onComplete;
+            this.onError     = onError;
+        }
+
+        async start() {
+            try {
+                const fd = new FormData();
+                this.files.forEach(f => fd.append('files[]', f));
+                this.meta.platforms.forEach(p => fd.append('platforms[]', p));
+                fd.append('caption', this.meta.caption || '');
+                fd.append('description', this.meta.description || '');
+                (this.meta.tags || []).forEach(t => fd.append('tags[]', t));
+                if (this.meta.scheduled_at) fd.append('scheduled_at', this.meta.scheduled_at);
+                if (this.meta.publish_now)  fd.append('publish_now', '1');
+
+                this.onProgress(50);
+                const result = await api.postForm('/upload/photo', fd);
+                this.onProgress(100);
+                this.onComplete(result);
+                return result;
+            } catch (e) {
+                this.onError(e.message);
+            }
+        }
+
+        cancel() { /* no in-flight chunks to stop — the single request either finishes or errors */ }
+    }
+
     // =========================================================================
     // Upload wizard — Content step (post type, destinations, file) then
     // Details step (caption/description/tags, schedule, Publish Now/Schedule),
@@ -258,7 +321,13 @@
     // Now/Schedule is clicked from the Details step — selecting a file in
     // step 1 just previews it, it doesn't upload yet.
     // =========================================================================
-    let uploadSelectedFile = null;
+    // Always an array — reel/story keep exactly one entry (a new selection
+    // replaces it, same as the old single-file behavior); photo allows up
+    // to MAX_PHOTO_FILES, added to rather than replaced.
+    let uploadSelectedFiles = [];
+    const MAX_PHOTO_FILES = 10;
+    const VIDEO_MIME_TYPES = ['video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/webm'];
+    const IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
     function initUploadWizard() {
         const modal = document.getElementById('sas-upload-modal');
@@ -278,6 +347,8 @@
         const backdrop       = modal.querySelector('.sas-modal__backdrop');
 
         const area            = document.getElementById('sas-upload-area');
+        const areaTitle        = document.getElementById('sas-upload-area-title');
+        const areaHint          = document.getElementById('sas-upload-area-hint');
         const fileInput        = document.getElementById('sas-file-input');
         const preview           = document.getElementById('sas-upload-file-preview');
         const progressWrap      = document.getElementById('sas-upload-progress-wrap');
@@ -309,7 +380,7 @@
         cancelBtn?.addEventListener('click', closeModal);
 
         function resetWizard() {
-            uploadSelectedFile = null;
+            uploadSelectedFiles = [];
             preview.style.display = 'none';
             preview.innerHTML = '';
             progressWrap.style.display = 'none';
@@ -320,8 +391,36 @@
             tagsEl.value = '';
             scheduleInputEl.value = '';
             allButtons.forEach(b => { if (b) b.disabled = false; });
+            applyFileInputMode();
             showStep('content');
         }
+
+        /**
+         * Swaps the dropzone's accept/multiple attributes and copy between
+         * "one video file" (reel/story) and "up to 10 images" (photo) —
+         * fired on open and on every content-type change.
+         */
+        function applyFileInputMode() {
+            const isPhoto = getSelectedContentType(modal) === 'photo';
+            fileInput.accept = isPhoto
+                ? 'image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp'
+                : 'video/mp4,video/quicktime,video/x-msvideo,video/webm,.mp4,.mov,.avi,.webm';
+            fileInput.multiple = isPhoto;
+            if (areaTitle) areaTitle.textContent = isPhoto
+                ? 'Drop images here or click to browse'
+                : 'Drop a video here or click to browse';
+            if (areaHint) areaHint.textContent = isPhoto
+                ? `JPG, PNG, WEBP — up to ${MAX_PHOTO_FILES} images, max 25 MB each`
+                : 'MP4, MOV, AVI, WEBM — max 5 GB';
+        }
+        modal.querySelectorAll('.sas-upload-content-type').forEach(r => r.addEventListener('change', () => {
+            // Switching post type mid-selection would otherwise leave stale
+            // video/image files picked under the previous mode — clear and
+            // let the user re-pick under the new mode's rules.
+            uploadSelectedFiles = [];
+            renderPreview();
+            applyFileInputMode();
+        }));
 
         function showStep(step) {
             contentPanel.hidden = step !== 'content';
@@ -344,46 +443,94 @@
         }
 
         area.addEventListener('click', () => fileInput.click());
-        fileInput.addEventListener('change', e => setFile(e.target.files?.[0]));
+        fileInput.addEventListener('change', e => addFiles(e.target.files));
         area.addEventListener('dragover', e => { e.preventDefault(); area.classList.add('sas-drag-over'); });
         area.addEventListener('dragleave', () => area.classList.remove('sas-drag-over'));
         area.addEventListener('drop', e => {
             e.preventDefault();
             area.classList.remove('sas-drag-over');
-            setFile(e.dataTransfer.files?.[0]);
+            addFiles(e.dataTransfer.files);
         });
 
-        function setFile(file) {
-            if (!file) return;
-            const allowed = ['video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/webm'];
-            if (!allowed.includes(file.type) && !file.name.match(/\.(mp4|mov|avi|webm)$/i)) {
-                toast.error(`${file.name}: only MP4, MOV, AVI, or WEBM allowed`);
+        /**
+         * @param fileList FileList from an <input type=file> change event or a drop
+         */
+        function addFiles(fileList) {
+            const files = [...(fileList || [])];
+            if (!files.length) return;
+            const isPhoto = getSelectedContentType(modal) === 'photo';
+
+            if (!isPhoto) {
+                const file = files[0];
+                if (!VIDEO_MIME_TYPES.includes(file.type) && !file.name.match(/\.(mp4|mov|avi|webm)$/i)) {
+                    toast.error(`${file.name}: only MP4, MOV, AVI, or WEBM allowed`);
+                    return;
+                }
+                uploadSelectedFiles = [file]; // a new pick always replaces, same as the old single-file behavior
+                renderPreview();
                 return;
             }
-            uploadSelectedFile = file;
-            preview.style.display = '';
-            preview.innerHTML = `
-                <span class="sas-upload-item__name" title="${esc(file.name)}">${esc(file.name)}</span>
-                <span class="sas-upload-item__size">${formatBytes(file.size)}</span>
-                <button type="button" class="sas-upload-item__remove" id="sas-upload-remove-file" title="Remove">
-                    <span class="dashicons dashicons-no-alt"></span>
-                </button>
-            `;
-            document.getElementById('sas-upload-remove-file')?.addEventListener('click', (e) => {
-                e.stopPropagation();
-                uploadSelectedFile = null;
+
+            const accepted = [];
+            for (const file of files) {
+                if (!IMAGE_MIME_TYPES.includes(file.type) && !file.name.match(/\.(jpe?g|png|webp)$/i)) {
+                    toast.error(`${file.name}: only JPG, PNG, or WEBP allowed`);
+                    continue;
+                }
+                accepted.push(file);
+            }
+            const room = MAX_PHOTO_FILES - uploadSelectedFiles.length;
+            if (accepted.length > room) {
+                toast.error(`A photo post supports at most ${MAX_PHOTO_FILES} images — only the first ${room} of these were added.`);
+            }
+            uploadSelectedFiles = uploadSelectedFiles.concat(accepted.slice(0, Math.max(0, room)));
+            renderPreview();
+        }
+
+        function removeFileAt(index) {
+            uploadSelectedFiles.splice(index, 1);
+            renderPreview();
+        }
+
+        function renderPreview() {
+            if (!uploadSelectedFiles.length) {
                 preview.style.display = 'none';
                 preview.innerHTML = '';
+                return;
+            }
+            preview.style.display = '';
+            preview.innerHTML = '';
+            uploadSelectedFiles.forEach((file, i) => {
+                const row = document.createElement('div');
+                row.className = 'sas-upload-item';
+                row.innerHTML = `
+                    <span class="sas-upload-item__name" title="${esc(file.name)}">${esc(file.name)}</span>
+                    <span class="sas-upload-item__size">${formatBytes(file.size)}</span>
+                    <button type="button" class="sas-upload-item__remove" title="Remove">
+                        <span class="dashicons dashicons-no-alt"></span>
+                    </button>
+                `;
+                row.querySelector('.sas-upload-item__remove').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    removeFileAt(i);
+                });
+                preview.appendChild(row);
             });
         }
 
         nextBtn.addEventListener('click', () => {
-            if (!uploadSelectedFile) { toast.error('Select a video file to upload.'); return; }
+            const isPhoto = getSelectedContentType(modal) === 'photo';
+            if (!uploadSelectedFiles.length) {
+                toast.error(isPhoto ? 'Select at least one image to upload.' : 'Select a video file to upload.');
+                return;
+            }
             const platforms = getSelectedPlatforms(modal);
             if (!platforms.length) {
                 accountsError.textContent = getSelectedContentType(modal) === 'story'
                     ? 'Connect an Instagram account to upload Stories.'
-                    : 'Select at least one platform to publish to.';
+                    : isPhoto
+                        ? 'Connect an Instagram or Facebook account to upload photos.'
+                        : 'Select at least one platform to publish to.';
                 accountsError.style.display = '';
                 return;
             }
@@ -396,7 +543,13 @@
         scheduleBtn.addEventListener('click', () => submit(false));
 
         function submit(publishNow) {
-            if (!uploadSelectedFile) { toast.error('Select a video file to upload.'); showStep('content'); return; }
+            const contentType = getSelectedContentType(modal);
+            const isPhoto     = contentType === 'photo';
+            if (!uploadSelectedFiles.length) {
+                toast.error(isPhoto ? 'Select at least one image to upload.' : 'Select a video file to upload.');
+                showStep('content');
+                return;
+            }
             const platforms = getSelectedPlatforms(modal);
             if (!platforms.length) { showStep('content'); return; }
 
@@ -406,8 +559,7 @@
                 return;
             }
 
-            const contentType = getSelectedContentType(modal);
-            const isStory     = contentType === 'story';
+            const isStory = contentType === 'story';
             const meta = {
                 platforms,
                 content_type: contentType,
@@ -424,29 +576,34 @@
             allButtons.forEach(b => { if (b) b.disabled = true; });
             progressWrap.style.display = '';
             progressWrap.innerHTML = '';
-            const item = createUploadItem(uploadSelectedFile.name, uploadSelectedFile.size, platforms.join(' + '));
+
+            const itemLabel = isPhoto
+                ? `${uploadSelectedFiles.length} image${uploadSelectedFiles.length !== 1 ? 's' : ''}`
+                : uploadSelectedFiles[0].name;
+            const itemSize = uploadSelectedFiles.reduce((sum, f) => sum + f.size, 0);
+            const item = createUploadItem(itemLabel, itemSize, platforms.join(' + '));
             progressWrap.appendChild(item.el);
 
-            const uploader = new ChunkedUploader(
-                uploadSelectedFile, meta,
-                pct => item.setProgress(pct),
-                result => {
-                    const [v] = result.videos || [];
-                    item.setDone(publishNow ? 'Queued to publish now!' : (v?.publish_date ? `Scheduled: ${formatDate(v.publish_date)}` : 'Uploaded!'));
-                    toast.success(
-                        publishNow
-                            ? `${uploadSelectedFile.name} uploaded — queued for immediate publishing!`
-                            : `${uploadSelectedFile.name} uploaded and scheduled!`
-                    );
-                    reloadCurrentPage();
-                    setTimeout(closeModal, 700);
-                },
-                msg => {
-                    item.setError(msg);
-                    toast.error(`Upload failed: ${msg}`);
-                    allButtons.forEach(b => { if (b) b.disabled = false; });
-                }
-            );
+            const onComplete = result => {
+                const [v] = result.videos || [];
+                item.setDone(publishNow ? 'Queued to publish now!' : (v?.publish_date ? `Scheduled: ${formatDate(v.publish_date)}` : 'Uploaded!'));
+                toast.success(
+                    publishNow
+                        ? `${itemLabel} uploaded — queued for immediate publishing!`
+                        : `${itemLabel} uploaded and scheduled!`
+                );
+                reloadCurrentPage();
+                setTimeout(closeModal, 700);
+            };
+            const onError = msg => {
+                item.setError(msg);
+                toast.error(`Upload failed: ${msg}`);
+                allButtons.forEach(b => { if (b) b.disabled = false; });
+            };
+
+            const uploader = isPhoto
+                ? new PhotoUploader(uploadSelectedFiles, meta, pct => item.setProgress(pct), onComplete, onError)
+                : new ChunkedUploader(uploadSelectedFiles[0], meta, pct => item.setProgress(pct), onComplete, onError);
             uploader.start();
         }
     }
@@ -491,6 +648,228 @@
                 );
             },
         };
+    }
+
+    // =========================================================================
+    // Bulk Import — CSV only (no XLSX; this plugin has no JS bundler to ship
+    // a binary-parsing library with, and the dashboard's own Excel import
+    // already works for anyone who'd rather use that). Same column schema
+    // as the dashboard's template, hand-parsed with a small RFC4180-ish CSV
+    // reader so quoted commas/newlines inside a cell don't break rows.
+    // =========================================================================
+    let bulkImportRows = [];
+
+    function parseCsvText(text) {
+        const rows = [];
+        let row = [], field = '', inQuotes = false;
+        for (let i = 0; i < text.length; i++) {
+            const c = text[i];
+            if (inQuotes) {
+                if (c === '"') {
+                    if (text[i + 1] === '"') { field += '"'; i++; } else { inQuotes = false; }
+                } else {
+                    field += c;
+                }
+            } else if (c === '"') {
+                inQuotes = true;
+            } else if (c === ',') {
+                row.push(field); field = '';
+            } else if (c === '\n' || c === '\r') {
+                if (c === '\r' && text[i + 1] === '\n') i++;
+                row.push(field); field = '';
+                if (row.length > 1 || row[0] !== '') rows.push(row);
+                row = [];
+            } else {
+                field += c;
+            }
+        }
+        if (field !== '' || row.length) { row.push(field); rows.push(row); }
+        return rows;
+    }
+
+    const CSV_HEADER_ALIASES = {
+        file_url: 'file_url', 'video url': 'file_url', video_url: 'file_url', url: 'file_url',
+        image_urls: 'image_urls', 'image urls': 'image_urls', images: 'image_urls',
+        caption: 'caption', title: 'caption',
+        description: 'description', desc: 'description',
+        tags: 'tags', tag: 'tags', hashtags: 'tags',
+        content_type: 'content_type', 'content type': 'content_type', type: 'content_type',
+        scheduled_at: 'scheduled_at', 'scheduled at': 'scheduled_at', schedule: 'scheduled_at', date: 'scheduled_at',
+    };
+
+    function normalizeContentType(raw) {
+        const v = String(raw || '').trim().toLowerCase();
+        if (v === 'story' || v === 'stories') return 'story';
+        if (v === 'photo' || v === 'photos' || v === 'image' || v === 'images') return 'photo';
+        return 'reel';
+    }
+
+    function parseBulkImportCsv(text) {
+        const table = parseCsvText(text);
+        if (!table.length) return { rows: [], skipped: 0 };
+        const headers = table[0].map(h => h.trim().toLowerCase());
+        const fieldFor = headers.map(h => CSV_HEADER_ALIASES[h] || null);
+        if (!fieldFor.includes('file_url') && !fieldFor.includes('image_urls')) {
+            throw new Error('No "file_url" or "image_urls" column found in the header row.');
+        }
+
+        const rows = [];
+        let skipped = 0;
+        for (let r = 1; r < table.length; r++) {
+            const raw = table[r];
+            if (!raw.some(c => c.trim())) continue; // fully blank row
+            const item = { file_url: '', image_urls: '', caption: '', description: '', tags: '', content_type: 'reel', scheduled_at: '' };
+            fieldFor.forEach((field, i) => {
+                if (!field) return;
+                const val = (raw[i] || '').trim();
+                if (field === 'content_type') item.content_type = normalizeContentType(val);
+                else item[field] = val;
+            });
+            if (!item.file_url && !item.image_urls && !item.caption) continue;
+
+            const isPhoto = item.content_type === 'photo';
+            const imageUrls = isPhoto ? item.image_urls.split(/[\n,;|]+/).map(u => u.trim()).filter(Boolean) : [];
+            if (isPhoto ? !imageUrls.length : !item.file_url) {
+                skipped++;
+                continue;
+            }
+            rows.push({
+                caption: item.content_type === 'story' ? '' : item.caption,
+                description: item.content_type === 'story' ? '' : item.description,
+                tags: item.content_type === 'story' ? [] : item.tags.split(',').map(t => t.trim()).filter(Boolean),
+                content_type: item.content_type,
+                file_url: isPhoto ? undefined : item.file_url,
+                image_urls: isPhoto ? imageUrls : undefined,
+                scheduled_at: item.scheduled_at || '',
+            });
+        }
+        return { rows, skipped };
+    }
+
+    function downloadSampleCsv() {
+        const header = 'file_url,image_urls,caption,description,tags,content_type,scheduled_at';
+        const lines = [
+            header,
+            'https://your-site.com/wp-content/uploads/video.mp4,,"My video title","A longer description","travel,lifestyle",reel,',
+            '"",https://your-site.com/wp-content/uploads/photo-1.jpg|https://your-site.com/wp-content/uploads/photo-2.jpg,"Swipe through our new collection","","newcollection,shop",photo,',
+            'https://your-site.com/wp-content/uploads/story.mp4,,,,,story,',
+        ];
+        const blob = new Blob([lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'bulk-import-template.csv';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+    }
+
+    function initBulkImport() {
+        const modal     = document.getElementById('sas-bulk-import-modal');
+        const trigger   = document.getElementById('sas-bulk-import-trigger');
+        const fileInput = document.getElementById('sas-bulk-import-file');
+        const summary   = document.getElementById('sas-bulk-import-summary');
+        const submitBtn = document.getElementById('sas-bulk-import-submit');
+        const resultsWrap = document.getElementById('sas-bulk-import-results');
+        const resultsBody = document.getElementById('sas-bulk-import-results-body');
+        if (!modal || !trigger) return;
+
+        document.getElementById('sas-bulk-import-sample')?.addEventListener('click', downloadSampleCsv);
+
+        trigger.addEventListener('click', () => {
+            bulkImportRows = [];
+            fileInput.value = '';
+            summary.textContent = '';
+            submitBtn.disabled = true;
+            resultsWrap.style.display = 'none';
+            resultsBody.innerHTML = '';
+            modal.removeAttribute('hidden');
+        });
+        modal.querySelectorAll('.sas-modal__close, .sas-modal__backdrop').forEach(el =>
+            el.addEventListener('click', () => modal.setAttribute('hidden', ''))
+        );
+
+        fileInput.addEventListener('change', async () => {
+            const file = fileInput.files?.[0];
+            submitBtn.disabled = true;
+            resultsWrap.style.display = 'none';
+            resultsBody.innerHTML = '';
+            if (!file) { summary.textContent = ''; return; }
+            try {
+                const text = await file.text();
+                const { rows, skipped } = parseBulkImportCsv(text);
+                bulkImportRows = rows;
+                if (!rows.length) {
+                    summary.textContent = 'No valid rows found. Make sure the file has a file_url or image_urls column with valid links.';
+                    return;
+                }
+                summary.textContent = `${rows.length} item${rows.length !== 1 ? 's' : ''} found` +
+                    (skipped ? ` · ${skipped} row${skipped !== 1 ? 's' : ''} skipped (missing/invalid link)` : '');
+                submitBtn.disabled = false;
+            } catch (e) {
+                summary.textContent = `Error: ${e.message}`;
+            }
+        });
+
+        submitBtn.addEventListener('click', async () => {
+            if (!bulkImportRows.length) return;
+            const platforms = [...modal.querySelectorAll('.sas-bulk-import-platform:checked')].map(cb => cb.value);
+            if (!platforms.length) { toast.error('Select at least one platform to publish to.'); return; }
+
+            submitBtn.disabled = true;
+            submitBtn.textContent = sasData.strings.saving;
+            resultsWrap.style.display = '';
+            resultsBody.innerHTML = bulkImportRows.map((r, i) => `
+                <tr data-row="${i}">
+                    <td>${i + 2}</td>
+                    <td class="sas-truncate">${esc(r.caption || (r.content_type === 'photo' ? `${r.image_urls.length} image(s)` : r.file_url))}</td>
+                    <td><span class="dashicons dashicons-clock"></span> Pending</td>
+                    <td></td>
+                </tr>
+            `).join('');
+
+            try {
+                const videos = bulkImportRows.map(r => {
+                    const item = {
+                        caption: r.caption, description: r.description, tags: r.tags, content_type: r.content_type,
+                    };
+                    if (r.content_type === 'photo') {
+                        item.images = r.image_urls.map(u => ({ image_url: u }));
+                    } else {
+                        item.file_url = r.file_url;
+                    }
+                    if (r.scheduled_at) {
+                        // 'YYYY-MM-DDTHH:MM' or 'YYYY-MM-DD HH:MM' (WP-local)
+                        // — SAS_API converts via wp_timezone() the same way
+                        // the upload wizard's schedule field already does.
+                        item.scheduled_at = r.scheduled_at.trim().replace('T', ' ');
+                    }
+                    return item;
+                });
+                const result = await api.post('/videos/bulk-create', { platforms, videos });
+                (result.results || []).forEach(res => {
+                    const tr = resultsBody.querySelector(`tr[data-row="${res.index}"]`);
+                    if (!tr) return;
+                    const statusCell = tr.children[2];
+                    const errorCell  = tr.children[3];
+                    if (res.status === 'created') {
+                        statusCell.innerHTML = '<span class="dashicons dashicons-yes-alt" style="color:var(--sas-success-text)"></span> Done';
+                    } else {
+                        statusCell.innerHTML = '<span class="dashicons dashicons-warning" style="color:var(--sas-danger-text)"></span> Failed';
+                        errorCell.textContent = res.error || '';
+                    }
+                });
+                toast.success(`${result.created} imported, ${result.failed} failed.`);
+                loadVideos();
+                loadStats();
+            } catch (e) {
+                toast.error(`Import failed: ${e.message}`);
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Import';
+            }
+        });
     }
 
     // =========================================================================
@@ -622,6 +1001,7 @@
     async function initVideos() {
         await loadVideos();
         initUploadWizard();
+        initBulkImport();
 
         let searchTimer;
         document.getElementById('sas-search')?.addEventListener('input', e => {
@@ -1274,6 +1654,398 @@
     }
 
     // =========================================================================
+    // Automations — Comment Automation (comment -> public reply + DM) and
+    // DM Reply (inbound DM -> auto-reply). Both tabs share the same
+    // Account dropdown data and the same Activity modal; each has its own
+    // rule-create/edit modal since their fields genuinely differ (Comment
+    // Automation has posts/public-reply/DM-message-and-button, DM Reply is
+    // just trigger + reply variants).
+    // =========================================================================
+    let automationAccounts = [];
+
+    async function initAutomations() {
+        document.querySelectorAll('.sas-tab').forEach(btn => btn.addEventListener('click', () => {
+            document.querySelectorAll('.sas-tab').forEach(b => b.classList.toggle('is-active', b === btn));
+            document.querySelectorAll('[data-tab-panel]').forEach(p => {
+                p.hidden = p.dataset.tabPanel !== btn.dataset.tab;
+            });
+        }));
+
+        try {
+            automationAccounts = (await api.get('/accounts')).filter(a => a.platform !== 'youtube');
+        } catch (e) {
+            automationAccounts = [];
+        }
+        const accountOptions = automationAccounts
+            .map(a => `<option value="${esc(a.id)}">${esc(a.account_name)} (${esc(a.platform)})</option>`)
+            .join('');
+        ['sas-automation-account-filter', 'sas-dm-automation-account-filter'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.insertAdjacentHTML('beforeend', accountOptions);
+        });
+        ['sas-automation-account', 'sas-dm-automation-account'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.innerHTML = accountOptions;
+        });
+
+        document.getElementById('sas-automation-account-filter')?.addEventListener('change', loadAutomationRules);
+        document.getElementById('sas-dm-automation-account-filter')?.addEventListener('change', loadDmAutomationRules);
+        document.getElementById('sas-new-automation-rule')?.addEventListener('click', () => openAutomationModal(null));
+        document.getElementById('sas-new-dm-automation-rule')?.addEventListener('click', () => openDmAutomationModal(null));
+
+        document.getElementById('sas-automation-trigger')?.addEventListener('change', updateAutomationKeywordsVisibility);
+        document.getElementById('sas-dm-automation-trigger')?.addEventListener('change', updateDmAutomationKeywordsVisibility);
+
+        document.querySelectorAll('.sas-modal__close').forEach(btn => btn.addEventListener('click', () => {
+            btn.closest('.sas-modal')?.setAttribute('hidden', '');
+        }));
+        document.querySelectorAll('.sas-modal__backdrop').forEach(bd => bd.addEventListener('click', () => {
+            bd.closest('.sas-modal')?.setAttribute('hidden', '');
+        }));
+
+        document.getElementById('sas-save-automation')?.addEventListener('click', saveAutomationRule);
+        document.getElementById('sas-save-dm-automation')?.addEventListener('click', saveDmAutomationRule);
+        document.getElementById('sas-automation-delete')?.addEventListener('click', deleteAutomationRule);
+        document.getElementById('sas-dm-automation-delete')?.addEventListener('click', deleteDmAutomationRule);
+
+        await Promise.all([loadAutomationRules(), loadDmAutomationRules()]);
+    }
+
+    function accountLabel(id) {
+        const a = automationAccounts.find(x => String(x.id) === String(id));
+        return a ? `${esc(a.account_name)} ${platformBadge(a.platform)}` : `#${esc(id)}`;
+    }
+
+    // ── Comment Automation ──────────────────────────────────────────────────
+
+    async function loadAutomationRules() {
+        const tbody = document.getElementById('sas-automation-rules-table-body');
+        if (!tbody) return;
+        tbody.innerHTML = '<tr><td colspan="6" class="sas-table__loading"><div class="sas-loading-skeleton"></div></td></tr>';
+        try {
+            const accountId = document.getElementById('sas-automation-account-filter')?.value || '';
+            const rules = await api.get('/automation-rules', accountId ? { social_account: accountId } : {});
+            if (!rules.length) {
+                tbody.innerHTML = '<tr><td colspan="6" class="sas-empty">No automations yet.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = rules.map(r => `
+                <tr data-id="${esc(r.id)}">
+                    <td>${accountLabel(r.social_account)}</td>
+                    <td>${r.trigger_type === 'any_comment' ? '<span class="sas-text-muted">Any comment</span>' : esc(r.keywords.join(', '))}</td>
+                    <td>${r.posts.length}</td>
+                    <td>${esc(r.sent_count)}${r.max_sends ? ' / ' + esc(r.max_sends) : ''}</td>
+                    <td><label class="sas-switch"><input type="checkbox" class="sas-automation-toggle" ${r.is_active ? 'checked' : ''}><span class="sas-switch__track"></span></label></td>
+                    <td class="sas-table__actions">
+                        <button class="sas-btn sas-btn--sm sas-btn--secondary sas-automation-activity-btn">Activity</button>
+                        <button class="sas-btn sas-btn--sm sas-btn--secondary sas-automation-edit-btn">Edit</button>
+                    </td>
+                </tr>
+            `).join('');
+
+            tbody.querySelectorAll('tr').forEach(tr => {
+                const id = tr.dataset.id;
+                const rule = rules.find(r => String(r.id) === String(id));
+                tr.querySelector('.sas-automation-toggle')?.addEventListener('change', async (e) => {
+                    try {
+                        await api.patch(`/automation-rules/${id}`, { is_active: e.target.checked });
+                        toast.success(e.target.checked ? 'Automation activated' : 'Automation deactivated');
+                    } catch (err) {
+                        e.target.checked = !e.target.checked;
+                        toast.error(err.message);
+                    }
+                });
+                tr.querySelector('.sas-automation-edit-btn')?.addEventListener('click', () => openAutomationModal(rule));
+                tr.querySelector('.sas-automation-activity-btn')?.addEventListener('click', () => openActivityModal('automation-rules', id));
+            });
+        } catch (e) {
+            tbody.innerHTML = `<tr><td colspan="6" class="sas-empty">Error: ${esc(e.message)}</td></tr>`;
+        }
+    }
+
+    function updateAutomationKeywordsVisibility() {
+        const isAny = document.getElementById('sas-automation-trigger')?.value === 'any_comment';
+        const field = document.getElementById('sas-automation-keywords-field');
+        if (field) field.style.display = isAny ? 'none' : '';
+    }
+
+    function openAutomationModal(rule) {
+        const modal = document.getElementById('sas-automation-modal');
+        if (!modal) return;
+        document.getElementById('sas-automation-modal-title').textContent = rule ? 'Edit Automation' : 'New Automation';
+        setVal('sas-automation-id', rule ? rule.id : '');
+        document.getElementById('sas-automation-account').value = rule ? rule.social_account : (automationAccounts[0]?.id ?? '');
+        document.getElementById('sas-automation-account').disabled = !!rule;
+        // Posts are stored as backend post ids, not URLs, and the URL is
+        // only known right after a resolve (not kept on the rule) — so
+        // editing starts this field blank; whatever's pasted on save is
+        // ADDED to the rule's existing posts (see existingIds below), it
+        // never replaces them.
+        document.getElementById('sas-automation-posts').value = '';
+        document.getElementById('sas-automation-posts').dataset.existingIds = rule ? JSON.stringify(rule.posts) : '[]';
+        setText('sas-automation-posts-hint', rule && rule.posts.length
+            ? `Currently watching ${rule.posts.length} post(s). Leave blank to keep them, or paste link(s) to replace the set.`
+            : 'Paste the post/Reel link(s) this rule should watch.');
+        document.getElementById('sas-automation-trigger').value = rule?.trigger_type || 'keyword';
+        setVal('sas-automation-keywords', (rule?.keywords || []).join(', '));
+        setVal('sas-automation-public-replies', (rule?.public_reply_texts || []).join('\n'));
+        setVal('sas-automation-dm-message', rule?.dm_message_text || '');
+        setVal('sas-automation-dm-button-label', rule?.dm_button_label || '');
+        setVal('sas-automation-dm-button-url', rule?.dm_button_url || '');
+        setVal('sas-automation-max-sends', rule?.max_sends ?? '');
+        document.getElementById('sas-automation-active').checked = rule ? !!rule.is_active : true;
+        document.getElementById('sas-automation-active-field').style.display = rule ? '' : 'none';
+        document.getElementById('sas-automation-delete').style.display = rule ? '' : 'none';
+        updateAutomationKeywordsVisibility();
+        modal.removeAttribute('hidden');
+    }
+
+    async function saveAutomationRule() {
+        const btn = document.getElementById('sas-save-automation');
+        const id = document.getElementById('sas-automation-id').value;
+        const accountId = document.getElementById('sas-automation-account').value;
+        if (!accountId) { toast.error('Select an account.'); return; }
+
+        btn.disabled = true;
+        btn.textContent = sasData.strings.saving;
+        try {
+            // Resolve every pasted URL into a post id before the rule
+            // itself is saved — the backend rule-save call takes ids, not
+            // URLs. An edit's field starts blank (see openAutomationModal);
+            // leaving it blank keeps the rule's existing posts untouched,
+            // pasting anything REPLACES the full set — simpler than
+            // appending forever with no way to ever remove one here.
+            const urls = document.getElementById('sas-automation-posts').value
+                .split('\n').map(u => u.trim()).filter(Boolean);
+            const existingIds = JSON.parse(document.getElementById('sas-automation-posts').dataset.existingIds || '[]');
+            let postIds = existingIds;
+            if (urls.length) {
+                const resolvedIds = [];
+                for (const url of urls) {
+                    try {
+                        const post = await api.post(`/accounts/${accountId}/posts/resolve-url`, { url });
+                        resolvedIds.push(post.id);
+                    } catch (err) {
+                        toast.error(`Could not resolve ${url}: ${err.message}`);
+                    }
+                }
+                postIds = [...new Set(resolvedIds)];
+            }
+
+            const triggerType = document.getElementById('sas-automation-trigger').value;
+            const payload = {
+                social_account: Number(accountId),
+                posts: postIds,
+                trigger_type: triggerType,
+                keywords: triggerType === 'any_comment' ? [] : document.getElementById('sas-automation-keywords').value.split(',').map(k => k.trim()).filter(Boolean),
+                public_reply_texts: document.getElementById('sas-automation-public-replies').value.split('\n').map(t => t.trim()).filter(Boolean).slice(0, 5),
+                dm_message_text: document.getElementById('sas-automation-dm-message').value.trim(),
+                dm_button_label: document.getElementById('sas-automation-dm-button-label').value.trim(),
+                dm_button_url: document.getElementById('sas-automation-dm-button-url').value.trim(),
+                max_sends: document.getElementById('sas-automation-max-sends').value || null,
+            };
+            if (id) payload.is_active = document.getElementById('sas-automation-active').checked;
+
+            if (!postIds.length) { toast.error('Add at least one post.'); return; }
+            if (!payload.public_reply_texts.length) { toast.error('Add at least one public reply.'); return; }
+            if (!payload.dm_message_text) { toast.error('Add a DM message.'); return; }
+
+            if (id) {
+                await api.patch(`/automation-rules/${id}`, payload);
+            } else {
+                await api.post('/automation-rules', payload);
+            }
+            toast.success('Automation saved.');
+            document.getElementById('sas-automation-modal').setAttribute('hidden', '');
+            loadAutomationRules();
+        } catch (e) {
+            toast.error(e.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Save';
+        }
+    }
+
+    async function deleteAutomationRule() {
+        const id = document.getElementById('sas-automation-id').value;
+        if (!id || !confirm('Delete this automation? Comments will no longer trigger a reply or DM.')) return;
+        try {
+            await api.del(`/automation-rules/${id}`);
+            toast.success('Automation deleted.');
+            document.getElementById('sas-automation-modal').setAttribute('hidden', '');
+            loadAutomationRules();
+        } catch (e) {
+            toast.error(e.message);
+        }
+    }
+
+    // ── DM Reply ─────────────────────────────────────────────────────────────
+
+    async function loadDmAutomationRules() {
+        const tbody = document.getElementById('sas-dm-automation-rules-table-body');
+        if (!tbody) return;
+        tbody.innerHTML = '<tr><td colspan="6" class="sas-table__loading"><div class="sas-loading-skeleton"></div></td></tr>';
+        try {
+            const accountId = document.getElementById('sas-dm-automation-account-filter')?.value || '';
+            const rules = await api.get('/dm-automation-rules', accountId ? { social_account: accountId } : {});
+            if (!rules.length) {
+                tbody.innerHTML = '<tr><td colspan="6" class="sas-empty">No DM automations yet.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = rules.map(r => `
+                <tr data-id="${esc(r.id)}">
+                    <td>${accountLabel(r.social_account)}</td>
+                    <td>${r.trigger_type === 'any_message' ? '<span class="sas-text-muted">Any message</span>' : esc(r.keywords.join(', '))}</td>
+                    <td>${r.reply_texts.length}</td>
+                    <td>${esc(r.sent_count)}${r.max_sends ? ' / ' + esc(r.max_sends) : ''}</td>
+                    <td><label class="sas-switch"><input type="checkbox" class="sas-dm-automation-toggle" ${r.is_active ? 'checked' : ''}><span class="sas-switch__track"></span></label></td>
+                    <td class="sas-table__actions">
+                        <button class="sas-btn sas-btn--sm sas-btn--secondary sas-dm-automation-activity-btn">Activity</button>
+                        <button class="sas-btn sas-btn--sm sas-btn--secondary sas-dm-automation-edit-btn">Edit</button>
+                    </td>
+                </tr>
+            `).join('');
+
+            tbody.querySelectorAll('tr').forEach(tr => {
+                const id = tr.dataset.id;
+                const rule = rules.find(r => String(r.id) === String(id));
+                tr.querySelector('.sas-dm-automation-toggle')?.addEventListener('change', async (e) => {
+                    try {
+                        await api.patch(`/dm-automation-rules/${id}`, { is_active: e.target.checked });
+                        toast.success(e.target.checked ? 'DM automation activated' : 'DM automation deactivated');
+                    } catch (err) {
+                        e.target.checked = !e.target.checked;
+                        toast.error(err.message);
+                    }
+                });
+                tr.querySelector('.sas-dm-automation-edit-btn')?.addEventListener('click', () => openDmAutomationModal(rule));
+                tr.querySelector('.sas-dm-automation-activity-btn')?.addEventListener('click', () => openActivityModal('dm-automation-rules', id));
+            });
+        } catch (e) {
+            tbody.innerHTML = `<tr><td colspan="6" class="sas-empty">Error: ${esc(e.message)}</td></tr>`;
+        }
+    }
+
+    function updateDmAutomationKeywordsVisibility() {
+        const isAny = document.getElementById('sas-dm-automation-trigger')?.value === 'any_message';
+        const field = document.getElementById('sas-dm-automation-keywords-field');
+        if (field) field.style.display = isAny ? 'none' : '';
+    }
+
+    function openDmAutomationModal(rule) {
+        const modal = document.getElementById('sas-dm-automation-modal');
+        if (!modal) return;
+        document.getElementById('sas-dm-automation-modal-title').textContent = rule ? 'Edit DM Automation' : 'New DM Automation';
+        setVal('sas-dm-automation-id', rule ? rule.id : '');
+        document.getElementById('sas-dm-automation-account').value = rule ? rule.social_account : (automationAccounts[0]?.id ?? '');
+        document.getElementById('sas-dm-automation-account').disabled = !!rule;
+        document.getElementById('sas-dm-automation-trigger').value = rule?.trigger_type || 'keyword';
+        setVal('sas-dm-automation-keywords', (rule?.keywords || []).join(', '));
+        setVal('sas-dm-automation-replies', (rule?.reply_texts || []).join('\n'));
+        setVal('sas-dm-automation-max-sends', rule?.max_sends ?? '');
+        document.getElementById('sas-dm-automation-active').checked = rule ? !!rule.is_active : true;
+        document.getElementById('sas-dm-automation-active-field').style.display = rule ? '' : 'none';
+        document.getElementById('sas-dm-automation-delete').style.display = rule ? '' : 'none';
+        updateDmAutomationKeywordsVisibility();
+        modal.removeAttribute('hidden');
+    }
+
+    async function saveDmAutomationRule() {
+        const btn = document.getElementById('sas-save-dm-automation');
+        const id = document.getElementById('sas-dm-automation-id').value;
+        const accountId = document.getElementById('sas-dm-automation-account').value;
+        if (!accountId) { toast.error('Select an account.'); return; }
+
+        const triggerType = document.getElementById('sas-dm-automation-trigger').value;
+        const payload = {
+            social_account: Number(accountId),
+            trigger_type: triggerType,
+            keywords: triggerType === 'any_message' ? [] : document.getElementById('sas-dm-automation-keywords').value.split(',').map(k => k.trim()).filter(Boolean),
+            reply_texts: document.getElementById('sas-dm-automation-replies').value.split('\n').map(t => t.trim()).filter(Boolean).slice(0, 5),
+            max_sends: document.getElementById('sas-dm-automation-max-sends').value || null,
+        };
+        if (id) payload.is_active = document.getElementById('sas-dm-automation-active').checked;
+
+        if (!payload.reply_texts.length) { toast.error('Add at least one auto-reply.'); return; }
+        if (triggerType === 'keyword' && !payload.keywords.length) { toast.error('Add at least one keyword, or switch to Any message.'); return; }
+
+        btn.disabled = true;
+        btn.textContent = sasData.strings.saving;
+        try {
+            if (id) {
+                await api.patch(`/dm-automation-rules/${id}`, payload);
+            } else {
+                await api.post('/dm-automation-rules', payload);
+            }
+            toast.success('DM automation saved.');
+            document.getElementById('sas-dm-automation-modal').setAttribute('hidden', '');
+            loadDmAutomationRules();
+        } catch (e) {
+            toast.error(e.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Save';
+        }
+    }
+
+    async function deleteDmAutomationRule() {
+        const id = document.getElementById('sas-dm-automation-id').value;
+        if (!id || !confirm('Delete this DM automation? Matching DMs will no longer get an auto-reply.')) return;
+        try {
+            await api.del(`/dm-automation-rules/${id}`);
+            toast.success('DM automation deleted.');
+            document.getElementById('sas-dm-automation-modal').setAttribute('hidden', '');
+            loadDmAutomationRules();
+        } catch (e) {
+            toast.error(e.message);
+        }
+    }
+
+    // ── Activity modal (shared) ─────────────────────────────────────────────
+
+    async function openActivityModal(kind, id) {
+        const modal = document.getElementById('sas-automation-activity-modal');
+        const head  = document.getElementById('sas-automation-activity-head');
+        const body  = document.getElementById('sas-automation-activity-body');
+        if (!modal || !head || !body) return;
+
+        const isComment = kind === 'automation-rules';
+        head.innerHTML = isComment
+            ? '<th>Commenter</th><th>Comment</th><th>Matched</th><th>Public Reply</th><th>DM</th><th>When</th>'
+            : '<th>Sender</th><th>Message</th><th>Matched</th><th>Reply</th><th>When</th>';
+        body.innerHTML = `<tr><td colspan="6" class="sas-table__loading"><div class="sas-loading-skeleton"></div></td></tr>`;
+        modal.removeAttribute('hidden');
+
+        try {
+            const events = await api.get(`/${kind}/${id}/events`);
+            if (!events.length) {
+                body.innerHTML = `<tr><td colspan="6" class="sas-empty">No activity yet.</td></tr>`;
+                return;
+            }
+            body.innerHTML = events.map(e => isComment ? `
+                <tr>
+                    <td>${esc(e.commenter_username || '—')}</td>
+                    <td class="sas-truncate" title="${esc(e.comment_text)}">${esc(e.comment_text || '—')}</td>
+                    <td>${esc(e.matched_keyword || '—')}</td>
+                    <td>${statusBadge(e.public_reply_status)}</td>
+                    <td>${statusBadge(e.dm_status)}</td>
+                    <td class="sas-text-muted">${esc(formatDate(e.created_at ? e.created_at.replace(' ', 'T') + 'Z' : ''))}</td>
+                </tr>
+            ` : `
+                <tr>
+                    <td>${esc(e.sender_username || '—')}</td>
+                    <td class="sas-truncate" title="${esc(e.message_text)}">${esc(e.message_text || '—')}</td>
+                    <td>${esc(e.matched_keyword || '—')}</td>
+                    <td>${statusBadge(e.dm_status)}</td>
+                    <td class="sas-text-muted">${esc(formatDate(e.created_at ? e.created_at.replace(' ', 'T') + 'Z' : ''))}</td>
+                </tr>
+            `).join('');
+        } catch (e) {
+            body.innerHTML = `<tr><td colspan="6" class="sas-empty">Error: ${esc(e.message)}</td></tr>`;
+        }
+    }
+
+    // =========================================================================
     // Utilities
     // =========================================================================
     function esc(str) {
@@ -1317,6 +2089,8 @@
             publishing:'Publishing', published:'Published',
             partially_published:'Partially Published',
             failed:'Failed', cancelled:'Cancelled',
+            // Automation event statuses (AutomationEvent/DmAutomationEvent.*_status).
+            pending:'Pending', sent:'Sent',
         };
         return `<span class="sas-badge sas-badge--${esc(status)}">${esc(labels[status] || status)}</span>`;
     }
@@ -1424,8 +2198,9 @@
         if (page === 'calendar')  initCalendar();
         if (page === 'accounts')  initAccounts();
         if (page === 'settings')  initSettings();
-        if (page === 'logs')      initLogs();
-        if (page === 'support')   initSupport();
+        if (page === 'logs')        initLogs();
+        if (page === 'automations') initAutomations();
+        if (page === 'support')     initSupport();
 
         annotatePlatformToggles();
     }

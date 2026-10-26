@@ -26,14 +26,15 @@ class SAS_Admin {
         );
 
         $pages = [
-            ['sas-dashboard', __('Dashboard', 'social-auto-scheduler'), [$this, 'render_dashboard']],
-            ['sas-videos',    __('Videos',    'social-auto-scheduler'), [$this, 'render_videos']],
-            ['sas-calendar',  __('Calendar',  'social-auto-scheduler'), [$this, 'render_calendar']],
-            ['sas-accounts',  __('Accounts',  'social-auto-scheduler'), [$this, 'render_accounts']],
-            ['sas-settings',  __('Settings',  'social-auto-scheduler'), [$this, 'render_settings']],
-            ['sas-logs',      __('Logs',      'social-auto-scheduler'), [$this, 'render_logs']],
-            ['sas-support',   __('Support',   'social-auto-scheduler'), [$this, 'render_support']],
-            ['sas-license',   __('License',   'social-auto-scheduler'), [$this, 'render_license']],
+            ['sas-dashboard',    __('Dashboard',    'social-auto-scheduler'), [$this, 'render_dashboard']],
+            ['sas-videos',       __('Videos',       'social-auto-scheduler'), [$this, 'render_videos']],
+            ['sas-calendar',     __('Calendar',     'social-auto-scheduler'), [$this, 'render_calendar']],
+            ['sas-automations',  __('Automations',  'social-auto-scheduler'), [$this, 'render_automations']],
+            ['sas-accounts',     __('Accounts',     'social-auto-scheduler'), [$this, 'render_accounts']],
+            ['sas-settings',     __('Settings',     'social-auto-scheduler'), [$this, 'render_settings']],
+            ['sas-logs',         __('Logs',         'social-auto-scheduler'), [$this, 'render_logs']],
+            ['sas-support',      __('Support',      'social-auto-scheduler'), [$this, 'render_support']],
+            ['sas-license',      __('License',      'social-auto-scheduler'), [$this, 'render_license']],
         ];
 
         foreach ($pages as [$slug, $label, $cb]) {
@@ -60,6 +61,7 @@ class SAS_Admin {
             'sas-dashboard',
             'sas-videos',
             'sas-calendar',
+            'sas-automations',
             'sas-accounts',
             'sas-settings',
             'sas-logs',
@@ -281,6 +283,13 @@ class SAS_Admin {
             return;
         }
         require_once SAS_PLUGIN_DIR . 'admin/templates/calendar.php';
+    }
+
+    public function render_automations(): void {
+        if ( $this->render_gate_if_unlicensed() ) {
+            return;
+        }
+        require_once SAS_PLUGIN_DIR . 'admin/templates/automations.php';
     }
 
     public function render_accounts(): void {

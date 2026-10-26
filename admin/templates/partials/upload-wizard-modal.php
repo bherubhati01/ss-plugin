@@ -16,7 +16,7 @@ if (!defined('ABSPATH')) {
     <div class="sas-modal__backdrop"></div>
     <div class="sas-modal__content sas-modal__content--wide">
         <div class="sas-modal__header">
-            <h3><?php esc_html_e('Upload Video', 'social-auto-scheduler'); ?></h3>
+            <h3><?php esc_html_e('Upload Video or Photo', 'social-auto-scheduler'); ?></h3>
             <button type="button" class="sas-modal__close sas-upload-modal__close" id="sas-upload-modal-close">&times;</button>
         </div>
 
@@ -48,6 +48,12 @@ if (!defined('ABSPATH')) {
                         <input type="radio" class="sas-upload-content-type" name="sas_upload_content_type" value="story" />
                         <span class="sas-platform-toggle__inner sas-platform-toggle__inner--story">
                             <?php esc_html_e('Story', 'social-auto-scheduler'); ?>
+                        </span>
+                    </label>
+                    <label class="sas-platform-toggle">
+                        <input type="radio" class="sas-upload-content-type" name="sas_upload_content_type" value="photo" />
+                        <span class="sas-platform-toggle__inner sas-platform-toggle__inner--photo">
+                            <?php esc_html_e('Photo', 'social-auto-scheduler'); ?>
                         </span>
                     </label>
                     <span class="sas-field__help" id="sas-content-type-help-upload" style="display:none;flex-basis:100%;">
@@ -83,11 +89,11 @@ if (!defined('ABSPATH')) {
 
                 <div id="sas-upload-area" class="sas-upload-area">
                     <div class="sas-upload-area__icon"><span class="dashicons dashicons-cloud-upload"></span></div>
-                    <p class="sas-upload-area__title"><?php esc_html_e('Drop a video here or click to browse', 'social-auto-scheduler'); ?></p>
-                    <p class="sas-upload-area__hint"><?php esc_html_e('MP4, MOV, AVI, WEBM — max 5 GB', 'social-auto-scheduler'); ?></p>
+                    <p class="sas-upload-area__title" id="sas-upload-area-title"><?php esc_html_e('Drop a video here or click to browse', 'social-auto-scheduler'); ?></p>
+                    <p class="sas-upload-area__hint" id="sas-upload-area-hint"><?php esc_html_e('MP4, MOV, AVI, WEBM — max 5 GB', 'social-auto-scheduler'); ?></p>
                     <input type="file" id="sas-file-input" accept="video/mp4,video/quicktime,video/x-msvideo,video/webm,.mp4,.mov,.avi,.webm" hidden />
                 </div>
-                <div id="sas-upload-file-preview" class="sas-upload-item" style="display:none;"></div>
+                <div id="sas-upload-file-preview" class="sas-upload-list" style="display:none;"></div>
             </div>
 
             <!-- Step 2: Details -->

@@ -31,6 +31,9 @@ class SAS_API {
         register_rest_route($ns, '/upload', [
             ['methods' => 'POST', 'callback' => [$this, 'upload_video'], 'permission_callback' => [$this, 'auth']],
         ]);
+        register_rest_route($ns, '/upload/photo', [
+            ['methods' => 'POST', 'callback' => [$this, 'upload_photo'], 'permission_callback' => [$this, 'auth']],
+        ]);
         register_rest_route($ns, '/upload/init', [
             ['methods' => 'POST', 'callback' => [$this, 'upload_init'], 'permission_callback' => [$this, 'auth']],
         ]);
@@ -101,6 +104,45 @@ class SAS_API {
         // --- Contact / Support ---
         register_rest_route($ns, '/contact', [
             ['methods' => 'POST', 'callback' => [$this, 'submit_contact'], 'permission_callback' => [$this, 'auth']],
+        ]);
+
+        // --- Comment Automation ---
+        register_rest_route($ns, '/automation-rules', [
+            ['methods' => 'GET',  'callback' => [$this, 'get_automation_rules'],  'permission_callback' => [$this, 'auth']],
+            ['methods' => 'POST', 'callback' => [$this, 'create_automation_rule'], 'permission_callback' => [$this, 'auth']],
+        ]);
+        register_rest_route($ns, '/automation-rules/(?P<id>\d+)', [
+            ['methods' => 'PATCH',  'callback' => [$this, 'update_automation_rule'], 'permission_callback' => [$this, 'auth']],
+            ['methods' => 'DELETE', 'callback' => [$this, 'delete_automation_rule'], 'permission_callback' => [$this, 'auth']],
+        ]);
+        register_rest_route($ns, '/automation-rules/(?P<id>\d+)/events', [
+            ['methods' => 'GET', 'callback' => [$this, 'get_automation_events'], 'permission_callback' => [$this, 'auth']],
+        ]);
+
+        // --- DM Reply Automation ---
+        register_rest_route($ns, '/dm-automation-rules', [
+            ['methods' => 'GET',  'callback' => [$this, 'get_dm_automation_rules'],  'permission_callback' => [$this, 'auth']],
+            ['methods' => 'POST', 'callback' => [$this, 'create_dm_automation_rule'], 'permission_callback' => [$this, 'auth']],
+        ]);
+        register_rest_route($ns, '/dm-automation-rules/(?P<id>\d+)', [
+            ['methods' => 'PATCH',  'callback' => [$this, 'update_dm_automation_rule'], 'permission_callback' => [$this, 'auth']],
+            ['methods' => 'DELETE', 'callback' => [$this, 'delete_dm_automation_rule'], 'permission_callback' => [$this, 'auth']],
+        ]);
+        register_rest_route($ns, '/dm-automation-rules/(?P<id>\d+)/events', [
+            ['methods' => 'GET', 'callback' => [$this, 'get_dm_automation_events'], 'permission_callback' => [$this, 'auth']],
+        ]);
+
+        // --- Account posts (Comment Automation's "which posts" picker) ---
+        register_rest_route($ns, '/accounts/(?P<id>\d+)/posts', [
+            ['methods' => 'GET', 'callback' => [$this, 'get_account_posts'], 'permission_callback' => [$this, 'auth']],
+        ]);
+        register_rest_route($ns, '/accounts/(?P<id>\d+)/posts/resolve-url', [
+            ['methods' => 'POST', 'callback' => [$this, 'resolve_post_url'], 'permission_callback' => [$this, 'auth']],
+        ]);
+
+        // --- Bulk video create (Excel/CSV import) ---
+        register_rest_route($ns, '/videos/bulk-create', [
+            ['methods' => 'POST', 'callback' => [$this, 'bulk_create_videos'], 'permission_callback' => [$this, 'auth']],
         ]);
     }
 
@@ -368,6 +410,81 @@ class SAS_API {
                 'content_type' => $content_type,
                 // Stories don't support captions — see SAS_Upload_Service::send_to_backend().
                 'caption'      => 'story' === $content_type ? '' : sanitize_text_field($request->get_param('caption') ?: pathinfo($files['file']['name'], PATHINFO_FILENAME)),
+                'description'  => sanitize_textarea_field($request->get_param('description') ?? ''),
+                'tags'         => SAS_Helpers::sanitize_tags($request->get_param('tags') ?? []),
+                'scheduled_at' => $scheduled_at,
+                'publish_now'  => $publish_now,
+            ]);
+
+            return new WP_REST_Response([
+                'videos' => [
+                    ['id' => $video['id'] ?? 0, 'publish_date' => self::to_local_datetime($scheduled_at), 'publish_now' => $publish_now],
+                ],
+            ], 201);
+        } catch (\Throwable $e) {
+            return new WP_Error('upload_failed', $e->getMessage(), ['status' => 400]);
+        }
+    }
+
+    /**
+     * Normalizes PHP's nested multi-file $_FILES shape (one 'files' key
+     * whose 'name'/'type'/'tmp_name'/'error'/'size' sub-keys are each
+     * arrays, one slot per uploaded file) into a flat list of individual
+     * single-file arrays — the shape every other upload helper in this
+     * class (and media_handle_upload_array()) already expects.
+     */
+    private static function normalize_multi_files(array $entry): array {
+        if (!isset($entry['name']) || !is_array($entry['name'])) {
+            return [];
+        }
+        $out = [];
+        foreach ($entry['name'] as $i => $name) {
+            if (($entry['error'][$i] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+                continue; // a slot the browser left empty, or a per-file upload error — skip rather than fail the whole batch
+            }
+            $out[] = [
+                'name'     => $name,
+                'type'     => $entry['type'][$i] ?? '',
+                'tmp_name' => $entry['tmp_name'][$i] ?? '',
+                'error'    => $entry['error'][$i] ?? UPLOAD_ERR_OK,
+                'size'     => $entry['size'][$i] ?? 0,
+            ];
+        }
+        return $out;
+    }
+
+    public function upload_photo(WP_REST_Request $request): WP_REST_Response|WP_Error {
+        $file_params = $request->get_file_params();
+        $files = self::normalize_multi_files($file_params['files'] ?? []);
+        if (empty($files)) {
+            return new WP_Error('upload_error', __('No images uploaded or upload error.', 'social-auto-scheduler'), ['status' => 400]);
+        }
+
+        $raw_platforms = $request->get_param('platforms');
+        if (!$raw_platforms) {
+            $raw_platforms = $request->get_param('platform') ?? 'instagram';
+        }
+
+        try {
+            // Photo posts have no YouTube equivalent — sanitize_platforms()
+            // alone doesn't know that (it's content-type-agnostic), so this
+            // mirrors the same intersect SAS_Upload_Service::send_to_backend()
+            // applies, just early enough to pick a sane default below too.
+            $platforms = array_values(array_intersect(
+                SAS_Upload_Service::sanitize_platforms($raw_platforms),
+                ['instagram', 'facebook']
+            ));
+            $publish_now  = (bool) $request->get_param('publish_now');
+            $scheduled_at = $publish_now ? null : self::local_datetime_to_iso($request->get_param('scheduled_at'));
+            if (!$publish_now && !$scheduled_at) {
+                $scheduler    = new SAS_Scheduler_Service();
+                $scheduled_at = $scheduler->get_next_available_date(null, $platforms[0] ?? 'instagram')->format('c');
+            }
+
+            $service = new SAS_Upload_Service();
+            $video = $service->upload_photos_and_register($files, [
+                'platforms'    => $platforms ?: ['instagram'],
+                'caption'      => sanitize_text_field($request->get_param('caption') ?? ''),
                 'description'  => sanitize_textarea_field($request->get_param('description') ?? ''),
                 'tags'         => SAS_Helpers::sanitize_tags($request->get_param('tags') ?? []),
                 'scheduled_at' => $scheduled_at,
@@ -758,5 +875,324 @@ class SAS_API {
         }
 
         return new WP_REST_Response(['success' => true], 200);
+    }
+
+    // =========================================================================
+    // Comment Automation — "comment X (or anything) on this post, reply
+    // publicly and DM them" rules. Proxies the backend's plugin-scoped
+    // comment-automation endpoints (apps.comment_automation.rule_views),
+    // scoped to this website's own linked accounts.
+    // =========================================================================
+
+    private static function map_automation_rule(array $r): array {
+        return [
+            'id'                 => $r['id'] ?? 0,
+            'social_account'     => $r['social_account'] ?? 0,
+            'posts'              => $r['posts'] ?? [],
+            'trigger_type'       => $r['trigger_type'] ?? 'keyword',
+            'keywords'           => $r['keywords'] ?? [],
+            'public_reply_texts' => $r['public_reply_texts'] ?? [],
+            'dm_message_text'    => $r['dm_message_text'] ?? '',
+            'dm_button_label'    => $r['dm_button_label'] ?? '',
+            'dm_button_url'      => $r['dm_button_url'] ?? '',
+            'is_active'          => (bool) ($r['is_active'] ?? true),
+            'max_sends'          => $r['max_sends'] ?? null,
+            'sent_count'         => $r['sent_count'] ?? 0,
+            'created_at'         => self::to_local_datetime($r['created_at'] ?? null),
+        ];
+    }
+
+    private static function build_automation_rule_body(array $data): array {
+        $body = [];
+        if (isset($data['social_account'])) {
+            $body['social_account'] = absint($data['social_account']);
+        }
+        if (isset($data['posts'])) {
+            $body['posts'] = array_values(array_filter(array_map('absint', (array) $data['posts'])));
+        }
+        if (isset($data['trigger_type'])) {
+            $body['trigger_type'] = in_array($data['trigger_type'], ['keyword', 'any_comment'], true)
+                ? $data['trigger_type'] : 'keyword';
+        }
+        if (isset($data['keywords'])) {
+            $body['keywords'] = array_values(array_filter(array_map('sanitize_text_field', (array) $data['keywords'])));
+        }
+        if (isset($data['public_reply_texts'])) {
+            $body['public_reply_texts'] = array_values(array_filter(array_map('sanitize_text_field', (array) $data['public_reply_texts'])));
+        }
+        if (isset($data['dm_message_text'])) {
+            $body['dm_message_text'] = sanitize_textarea_field($data['dm_message_text']);
+        }
+        if (isset($data['dm_button_label'])) {
+            $body['dm_button_label'] = sanitize_text_field($data['dm_button_label']);
+        }
+        if (isset($data['dm_button_url'])) {
+            $body['dm_button_url'] = $data['dm_button_url'] ? esc_url_raw($data['dm_button_url']) : '';
+        }
+        if (isset($data['is_active'])) {
+            $body['is_active'] = (bool) $data['is_active'];
+        }
+        if (array_key_exists('max_sends', $data)) {
+            $body['max_sends'] = ($data['max_sends'] !== null && $data['max_sends'] !== '') ? absint($data['max_sends']) : null;
+        }
+        return $body;
+    }
+
+    public function get_automation_rules(WP_REST_Request $request): WP_REST_Response|WP_Error {
+        $params = array_filter(['social_account' => sanitize_text_field($request->get_param('social_account') ?? '')]);
+        $result = SAS_Backend_Client::get('/api/v1/comment-automation/plugin/rules/', $params);
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        return new WP_REST_Response(array_map([self::class, 'map_automation_rule'], $result['results'] ?? []), 200);
+    }
+
+    public function create_automation_rule(WP_REST_Request $request): WP_REST_Response|WP_Error {
+        $body   = self::build_automation_rule_body($request->get_json_params() ?? []);
+        $result = SAS_Backend_Client::post('/api/v1/comment-automation/plugin/rules/', $body);
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        return new WP_REST_Response(self::map_automation_rule($result), 201);
+    }
+
+    public function update_automation_rule(WP_REST_Request $request): WP_REST_Response|WP_Error {
+        $id     = absint($request->get_param('id'));
+        $body   = self::build_automation_rule_body($request->get_json_params() ?? []);
+        $result = SAS_Backend_Client::patch("/api/v1/comment-automation/plugin/rules/{$id}/", $body);
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        return new WP_REST_Response(self::map_automation_rule($result), 200);
+    }
+
+    public function delete_automation_rule(WP_REST_Request $request): WP_REST_Response|WP_Error {
+        $id     = absint($request->get_param('id'));
+        $result = SAS_Backend_Client::delete("/api/v1/comment-automation/plugin/rules/{$id}/");
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        return new WP_REST_Response(['success' => true], 200);
+    }
+
+    public function get_automation_events(WP_REST_Request $request): WP_REST_Response|WP_Error {
+        $id     = absint($request->get_param('id'));
+        $result = SAS_Backend_Client::get("/api/v1/comment-automation/plugin/rules/{$id}/events/");
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        $items = array_map(function ($e) {
+            return [
+                'id'                  => $e['id'] ?? 0,
+                'commenter_username'  => $e['commenter_username'] ?? '',
+                'comment_text'        => $e['comment_text'] ?? '',
+                'matched_keyword'     => $e['matched_keyword'] ?? '',
+                'public_reply_status' => $e['public_reply_status'] ?? 'pending',
+                'public_reply_error'  => $e['public_reply_error'] ?? '',
+                'dm_status'           => $e['dm_status'] ?? 'pending',
+                'dm_error'            => $e['dm_error'] ?? '',
+                'created_at'          => self::to_local_datetime($e['created_at'] ?? null),
+            ];
+        }, $result['results'] ?? []);
+        return new WP_REST_Response($items, 200);
+    }
+
+    // =========================================================================
+    // DM Reply Automation — "someone DMs us X (or anything), auto-reply"
+    // rules. No post/comment context at all — see DmAutomationRule.
+    // =========================================================================
+
+    private static function map_dm_automation_rule(array $r): array {
+        return [
+            'id'             => $r['id'] ?? 0,
+            'social_account' => $r['social_account'] ?? 0,
+            'trigger_type'   => $r['trigger_type'] ?? 'keyword',
+            'keywords'       => $r['keywords'] ?? [],
+            'reply_texts'    => $r['reply_texts'] ?? [],
+            'is_active'      => (bool) ($r['is_active'] ?? true),
+            'max_sends'      => $r['max_sends'] ?? null,
+            'sent_count'     => $r['sent_count'] ?? 0,
+            'created_at'     => self::to_local_datetime($r['created_at'] ?? null),
+        ];
+    }
+
+    private static function build_dm_automation_rule_body(array $data): array {
+        $body = [];
+        if (isset($data['social_account'])) {
+            $body['social_account'] = absint($data['social_account']);
+        }
+        if (isset($data['trigger_type'])) {
+            $body['trigger_type'] = in_array($data['trigger_type'], ['keyword', 'any_message'], true)
+                ? $data['trigger_type'] : 'keyword';
+        }
+        if (isset($data['keywords'])) {
+            $body['keywords'] = array_values(array_filter(array_map('sanitize_text_field', (array) $data['keywords'])));
+        }
+        if (isset($data['reply_texts'])) {
+            $body['reply_texts'] = array_values(array_filter(array_map('sanitize_text_field', (array) $data['reply_texts'])));
+        }
+        if (isset($data['is_active'])) {
+            $body['is_active'] = (bool) $data['is_active'];
+        }
+        if (array_key_exists('max_sends', $data)) {
+            $body['max_sends'] = ($data['max_sends'] !== null && $data['max_sends'] !== '') ? absint($data['max_sends']) : null;
+        }
+        return $body;
+    }
+
+    public function get_dm_automation_rules(WP_REST_Request $request): WP_REST_Response|WP_Error {
+        $params = array_filter(['social_account' => sanitize_text_field($request->get_param('social_account') ?? '')]);
+        $result = SAS_Backend_Client::get('/api/v1/comment-automation/plugin/dm-rules/', $params);
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        return new WP_REST_Response(array_map([self::class, 'map_dm_automation_rule'], $result['results'] ?? []), 200);
+    }
+
+    public function create_dm_automation_rule(WP_REST_Request $request): WP_REST_Response|WP_Error {
+        $body   = self::build_dm_automation_rule_body($request->get_json_params() ?? []);
+        $result = SAS_Backend_Client::post('/api/v1/comment-automation/plugin/dm-rules/', $body);
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        return new WP_REST_Response(self::map_dm_automation_rule($result), 201);
+    }
+
+    public function update_dm_automation_rule(WP_REST_Request $request): WP_REST_Response|WP_Error {
+        $id     = absint($request->get_param('id'));
+        $body   = self::build_dm_automation_rule_body($request->get_json_params() ?? []);
+        $result = SAS_Backend_Client::patch("/api/v1/comment-automation/plugin/dm-rules/{$id}/", $body);
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        return new WP_REST_Response(self::map_dm_automation_rule($result), 200);
+    }
+
+    public function delete_dm_automation_rule(WP_REST_Request $request): WP_REST_Response|WP_Error {
+        $id     = absint($request->get_param('id'));
+        $result = SAS_Backend_Client::delete("/api/v1/comment-automation/plugin/dm-rules/{$id}/");
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        return new WP_REST_Response(['success' => true], 200);
+    }
+
+    public function get_dm_automation_events(WP_REST_Request $request): WP_REST_Response|WP_Error {
+        $id     = absint($request->get_param('id'));
+        $result = SAS_Backend_Client::get("/api/v1/comment-automation/plugin/dm-rules/{$id}/events/");
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        $items = array_map(function ($e) {
+            return [
+                'id'              => $e['id'] ?? 0,
+                'sender_username' => $e['sender_username'] ?? '',
+                'message_text'    => $e['message_text'] ?? '',
+                'matched_keyword' => $e['matched_keyword'] ?? '',
+                'dm_status'       => $e['dm_status'] ?? 'pending',
+                'dm_error'        => $e['dm_error'] ?? '',
+                'created_at'      => self::to_local_datetime($e['created_at'] ?? null),
+            ];
+        }, $result['results'] ?? []);
+        return new WP_REST_Response($items, 200);
+    }
+
+    // =========================================================================
+    // Account posts — Comment Automation's "which posts does this watch"
+    // picker: the synced list, plus a paste-a-URL fallback for a post not
+    // (yet) in that list — same two options the dashboard offers.
+    // =========================================================================
+
+    private static function map_account_post(array $p): array {
+        return [
+            'id'            => $p['id'] ?? 0,
+            'caption'       => $p['caption'] ?? '',
+            'permalink_url' => $p['permalink_url'] ?? '',
+            'thumbnail_url' => $p['thumbnail_url'] ?? '',
+            'published_at'  => self::to_local_datetime($p['published_at'] ?? null),
+        ];
+    }
+
+    public function get_account_posts(WP_REST_Request $request): WP_REST_Response|WP_Error {
+        $id     = absint($request->get_param('id'));
+        $result = SAS_Backend_Client::get("/api/v1/social-accounts/plugin/{$id}/posts/", ['page_size' => 50]);
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        return new WP_REST_Response(array_map([self::class, 'map_account_post'], $result['results'] ?? []), 200);
+    }
+
+    public function resolve_post_url(WP_REST_Request $request): WP_REST_Response|WP_Error {
+        $id   = absint($request->get_param('id'));
+        $data = $request->get_json_params() ?? [];
+        $url  = esc_url_raw($data['url'] ?? '');
+        if (!$url) {
+            return new WP_Error('missing_url', __('A post URL is required.', 'social-auto-scheduler'), ['status' => 400]);
+        }
+        $result = SAS_Backend_Client::post("/api/v1/social-accounts/plugin/{$id}/posts/resolve-url/", ['url' => $url]);
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        return new WP_REST_Response(self::map_account_post($result), 200);
+    }
+
+    // =========================================================================
+    // Bulk video create — Excel/CSV import's plugin-side handler. Each row
+    // is already fully parsed/validated client-side (assets/js/admin.js's
+    // parseImportFile) — this just sanitizes and forwards to the backend's
+    // plugin-scoped bulk-create endpoint in one request.
+    // =========================================================================
+
+    public function bulk_create_videos(WP_REST_Request $request): WP_REST_Response|WP_Error {
+        $data      = $request->get_json_params() ?? [];
+        $platforms = SAS_Upload_Service::sanitize_platforms($data['platforms'] ?? []);
+        $rows      = is_array($data['videos'] ?? null) ? $data['videos'] : [];
+
+        if (empty($rows)) {
+            return new WP_Error('no_rows', __('No rows to import.', 'social-auto-scheduler'), ['status' => 400]);
+        }
+        if (count($rows) > 200) {
+            return new WP_Error('too_many_rows', __('A single import is limited to 200 rows.', 'social-auto-scheduler'), ['status' => 400]);
+        }
+
+        $videos = [];
+        foreach ($rows as $row) {
+            $content_type = SAS_Upload_Service::sanitize_content_type($row['content_type'] ?? 'reel');
+            $is_story     = 'story' === $content_type;
+            $item = [
+                'caption'      => $is_story ? '' : sanitize_text_field($row['caption'] ?? ''),
+                'description'  => $is_story ? '' : sanitize_textarea_field($row['description'] ?? ''),
+                'tags'         => $is_story ? [] : SAS_Helpers::sanitize_tags($row['tags'] ?? []),
+                'content_type' => $content_type,
+            ];
+            if ('photo' === $content_type) {
+                $images = [];
+                foreach ((array) ($row['image_urls'] ?? []) as $url) {
+                    $url = esc_url_raw($url);
+                    if ($url) {
+                        $images[] = ['image_url' => $url];
+                    }
+                }
+                $item['images'] = $images;
+            } else {
+                $item['file_url'] = esc_url_raw($row['file_url'] ?? '');
+            }
+            if (!empty($row['scheduled_at'])) {
+                $iso = self::local_datetime_to_iso($row['scheduled_at']);
+                if ($iso) {
+                    $item['scheduled_at'] = $iso;
+                }
+            }
+            $videos[] = $item;
+        }
+
+        $result = SAS_Backend_Client::post('/api/v1/videos/plugin/bulk/create/', [
+            'platforms' => $platforms,
+            'videos'    => $videos,
+        ]);
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        return new WP_REST_Response($result, 200);
     }
 }

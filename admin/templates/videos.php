@@ -6,10 +6,16 @@ if (!defined('ABSPATH')) {
 <div class="sas-wrap" data-page="videos">
     <div class="sas-page-header">
         <h1><?php esc_html_e('Videos', 'social-auto-scheduler'); ?></h1>
-        <button type="button" class="sas-btn sas-btn--primary sas-upload-trigger">
-            <span class="dashicons dashicons-upload"></span>
-            <?php esc_html_e('Upload Videos', 'social-auto-scheduler'); ?>
-        </button>
+        <div class="sas-page-header__actions">
+            <button type="button" class="sas-btn sas-btn--secondary" id="sas-bulk-import-trigger">
+                <span class="dashicons dashicons-media-spreadsheet"></span>
+                <?php esc_html_e('Bulk Import (CSV)', 'social-auto-scheduler'); ?>
+            </button>
+            <button type="button" class="sas-btn sas-btn--primary sas-upload-trigger">
+                <span class="dashicons dashicons-upload"></span>
+                <?php esc_html_e('Upload Videos', 'social-auto-scheduler'); ?>
+            </button>
+        </div>
     </div>
 
     <!-- Filters & Bulk Actions -->
@@ -110,6 +116,60 @@ if (!defined('ABSPATH')) {
         <div class="sas-modal__footer">
             <button class="sas-btn sas-btn--secondary sas-modal__close"><?php esc_html_e('Cancel', 'social-auto-scheduler'); ?></button>
             <button class="sas-btn sas-btn--primary" id="sas-save-video"><?php esc_html_e('Save Changes', 'social-auto-scheduler'); ?></button>
+        </div>
+    </div>
+</div>
+
+<!-- Bulk Import modal -->
+<div id="sas-bulk-import-modal" class="sas-modal" hidden>
+    <div class="sas-modal__backdrop"></div>
+    <div class="sas-modal__content sas-modal__content--wide">
+        <div class="sas-modal__header">
+            <h3><?php esc_html_e('Bulk Import from CSV', 'social-auto-scheduler'); ?></h3>
+            <button class="sas-modal__close">&times;</button>
+        </div>
+        <div class="sas-modal__body">
+            <div class="sas-notice sas-notice--info">
+                <strong><?php esc_html_e('Columns:', 'social-auto-scheduler'); ?></strong>
+                <?php esc_html_e('file_url (video), image_urls (photo — one or more, separated by | or ;), caption, description, tags (comma-separated), content_type (reel/story/photo), scheduled_at.', 'social-auto-scheduler'); ?>
+                <button type="button" class="sas-btn sas-btn--sm sas-btn--secondary" id="sas-bulk-import-sample" style="margin-top:8px;">
+                    <?php esc_html_e('Download sample CSV', 'social-auto-scheduler'); ?>
+                </button>
+            </div>
+
+            <div class="sas-field">
+                <label><?php esc_html_e('CSV file', 'social-auto-scheduler'); ?></label>
+                <input type="file" id="sas-bulk-import-file" accept=".csv,text/csv" />
+            </div>
+            <p class="sas-field__help" id="sas-bulk-import-summary"></p>
+
+            <div class="sas-platform-selector" id="sas-bulk-import-platform-selector">
+                <span class="sas-platform-selector__label"><?php esc_html_e('Publish to:', 'social-auto-scheduler'); ?></span>
+                <label class="sas-platform-toggle">
+                    <input type="checkbox" class="sas-bulk-import-platform" value="youtube" checked />
+                    <span class="sas-platform-toggle__inner sas-platform-toggle__inner--youtube">YouTube</span>
+                </label>
+                <label class="sas-platform-toggle">
+                    <input type="checkbox" class="sas-bulk-import-platform" value="instagram" />
+                    <span class="sas-platform-toggle__inner sas-platform-toggle__inner--instagram">Instagram</span>
+                </label>
+                <label class="sas-platform-toggle">
+                    <input type="checkbox" class="sas-bulk-import-platform" value="facebook" />
+                    <span class="sas-platform-toggle__inner sas-platform-toggle__inner--facebook">Facebook</span>
+                </label>
+            </div>
+            <p class="sas-field__help"><?php esc_html_e('Every row publishes to every platform checked here — rows whose content_type isn’t supported on a given platform (e.g. a photo row and YouTube) are skipped for that platform only, same as the Upload wizard.', 'social-auto-scheduler'); ?></p>
+
+            <div id="sas-bulk-import-results" class="sas-table-wrap" style="display:none;margin-top:16px;">
+                <table class="sas-table">
+                    <thead><tr><th>Row</th><th>Item</th><th>Status</th><th>Error</th></tr></thead>
+                    <tbody id="sas-bulk-import-results-body"></tbody>
+                </table>
+            </div>
+        </div>
+        <div class="sas-modal__footer">
+            <button class="sas-btn sas-btn--secondary sas-modal__close"><?php esc_html_e('Cancel', 'social-auto-scheduler'); ?></button>
+            <button class="sas-btn sas-btn--primary" id="sas-bulk-import-submit" disabled><?php esc_html_e('Import', 'social-auto-scheduler'); ?></button>
         </div>
     </div>
 </div>

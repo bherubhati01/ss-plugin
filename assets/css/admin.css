@@ -128,6 +128,27 @@ body.sas-dark {
     align-items: center;
 }
 
+/* Simple tab switcher — Automations page (Comment / DM Reply). */
+.sas-tabs {
+    display: flex;
+    gap: 4px;
+    border-bottom: 1px solid var(--sas-border);
+    margin-bottom: 20px;
+}
+.sas-tab {
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 10px 4px;
+    margin-right: 20px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--sas-text-muted);
+    cursor: pointer;
+}
+.sas-tab:hover { color: var(--sas-text); }
+.sas-tab.is-active { color: var(--sas-primary); border-bottom-color: var(--sas-primary); }
+
 .sas-row {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -388,6 +409,65 @@ body.sas-dark {
     margin: 4px 0 0;
 }
 
+.sas-field-row {
+    display: flex;
+    gap: 8px;
+}
+.sas-field-row > * { flex: 1; min-width: 0; }
+
+.sas-checkbox-label {
+    display: flex !important;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    cursor: pointer;
+}
+.sas-checkbox-label input[type="checkbox"] { margin: 0; }
+
+.sas-truncate {
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Small toggle switch — Automations table's Active column. */
+.sas-switch {
+    position: relative;
+    display: inline-block;
+    width: 34px;
+    height: 20px;
+    cursor: pointer;
+}
+.sas-switch input {
+    position: absolute;
+    opacity: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    cursor: pointer;
+}
+.sas-switch__track {
+    position: absolute;
+    inset: 0;
+    background: var(--sas-border);
+    border-radius: 999px;
+    transition: background .15s ease;
+}
+.sas-switch__track::before {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 16px;
+    height: 16px;
+    background: #fff;
+    border-radius: 50%;
+    transition: transform .15s ease;
+}
+.sas-switch input:checked + .sas-switch__track { background: var(--sas-primary); }
+.sas-switch input:checked + .sas-switch__track::before { transform: translateX(14px); }
+
 .sas-settings-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -530,6 +610,13 @@ body.sas-dark {
 .sas-platform-toggle input:checked + .sas-platform-toggle__inner--story {
     background: linear-gradient(135deg, #f09433, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888);
     border-color: #dc2743;
+    color: #fff;
+}
+
+/* Checked / active state – Photo content type */
+.sas-platform-toggle input:checked + .sas-platform-toggle__inner--photo {
+    background: #0ea5a4;
+    border-color: #0ea5a4;
     color: #fff;
 }
 
@@ -819,6 +906,10 @@ body.sas-dark {
 .sas-badge--partially_published { background: var(--sas-warning-bg); color: var(--sas-warning-text); }
 .sas-badge--failed     { background: var(--sas-danger-bg); color: var(--sas-danger-text); }
 .sas-badge--cancelled  { background: var(--sas-surface-2); color: var(--sas-cancelled); border: 1px solid var(--sas-border); }
+/* Automation event statuses (pending/sent/failed) — sent reuses "published"'s
+   success styling, pending reuses "queued"'s, failed is already shared above. */
+.sas-badge--sent    { background: var(--sas-success-bg); color: var(--sas-success-text); }
+.sas-badge--pending { background: rgba(122,90,248,.12); color: var(--sas-queued); }
 
 .sas-badge--level-info    { background: var(--sas-info-bg); color: var(--sas-info-text); }
 .sas-badge--level-warning { background: var(--sas-warning-bg); color: var(--sas-warning-text); }

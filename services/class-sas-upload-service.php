@@ -24,7 +24,20 @@ class SAS_Upload_Service {
 		'webm' => 'video/webm',
 	];
 
+	private const ALLOWED_IMAGE_MIMES = [
+		'jpg'  => 'image/jpeg',
+		'jpeg' => 'image/jpeg',
+		'png'  => 'image/png',
+		'webp' => 'image/webp',
+	];
+
 	private const MAX_FILE_SIZE = 5368709120; // 5 GB
+	private const MAX_IMAGE_FILE_SIZE = 26214400; // 25 MB — Instagram/Facebook's own photo-post ceiling
+	// Instagram's own carousel limit — same ceiling the backend's
+	// MAX_PHOTO_POST_IMAGES enforces (apps/videos/serializers.py), kept in
+	// sync by convention since the plugin pre-validates before ever
+	// reaching that backend check.
+	private const MAX_PHOTO_IMAGES = 10;
 
 	// ── Platform helpers ──────────────────────────────────────────────────────
 
@@ -47,14 +60,17 @@ class SAS_Upload_Service {
 	}
 
 	/**
-	 * Sanitize a content_type input down to 'reel' (default) or 'story'.
-	 * Stories can only publish to Instagram or Facebook — see
-	 * SAS_Upload_Service::send_to_backend() and the backend's VideoService,
-	 * which both enforce this independently.
+	 * Sanitize a content_type input down to 'reel' (default), 'story', or
+	 * 'photo'. Stories can only publish to Instagram, and photos only to
+	 * Instagram/Facebook — see SAS_Upload_Service::send_to_backend() and
+	 * the backend's VideoService, which both enforce this independently.
 	 */
 	public static function sanitize_content_type( $raw ): string {
 		$val = sanitize_key( (string) $raw );
-		return 'story' === $val ? 'story' : 'reel';
+		if ( 'story' === $val || 'photo' === $val ) {
+			return $val;
+		}
+		return 'reel';
 	}
 
 	// ── Chunked upload (large files) ──────────────────────────────────────────
@@ -267,6 +283,60 @@ class SAS_Upload_Service {
 		return $this->send_to_backend( $file_url, $meta );
 	}
 
+	// ── Photo post (content_type=photo) — multiple images, no chunking ───────
+
+	/**
+	 * Upload 1-10 images to the Media Library and register them with the
+	 * backend as a single photo/carousel post. Images are small enough
+	 * (25 MB ceiling each) that the chunked-upload machinery above — built
+	 * for multi-GB video files — isn't needed; one multipart request
+	 * carries every file.
+	 *
+	 * @param array $files Each a $_FILES-shaped entry, in carousel order.
+	 * @param array $meta  Same shape as upload_and_register(), minus
+	 *                      content_type (always forced to 'photo' here).
+	 * @return array Backend video object.
+	 * @throws RuntimeException On validation, upload, or backend error.
+	 */
+	public function upload_photos_and_register( array $files, array $meta ): array {
+		if ( empty( $files ) ) {
+			throw new RuntimeException( __( 'Select at least one image.', 'social-auto-scheduler' ) );
+		}
+		if ( count( $files ) > self::MAX_PHOTO_IMAGES ) {
+			throw new RuntimeException(
+				/* translators: %d: maximum number of images allowed in a photo post */
+				sprintf( __( 'A photo post supports at most %d images.', 'social-auto-scheduler' ), self::MAX_PHOTO_IMAGES )
+			);
+		}
+		foreach ( $files as $file ) {
+			$this->validate_image_file( $file );
+		}
+
+		$images         = [];
+		$attachment_ids = [];
+		foreach ( $files as $file ) {
+			$attachment_id = $this->upload_to_media_library( $file );
+			$url           = wp_get_attachment_url( $attachment_id );
+			if ( ! $url ) {
+				throw new RuntimeException( __( 'Could not retrieve URL for an uploaded image.', 'social-auto-scheduler' ) );
+			}
+			$images[]         = [ 'image_url' => $url ];
+			$attachment_ids[] = $attachment_id;
+		}
+
+		$meta['content_type'] = 'photo';
+		// KNOWN LIMITATION: the backend's Video.wp_attachment_id is a single
+		// field (one id per Video — see MediaCleanupView), not a list, so
+		// only this FIRST image's Media Library attachment is ever tracked
+		// for the 48h-after-publish cleanup sweep. Images 2+ in a multi-
+		// image photo post are never auto-deleted from the Media Library.
+		// Fixing this needs a backend change (tracking wp_attachment_id per
+		// VideoImage, not just per Video) — out of scope here; flagging so
+		// it isn't silently assumed to work.
+		$meta['wp_attachment_id'] = $attachment_ids[0];
+		return $this->send_to_backend( '', $meta, $images );
+	}
+
 	// ── Register a video URL that's already in the Media Library ─────────────
 
 	/**
@@ -300,6 +370,28 @@ class SAS_Upload_Service {
 		}
 	}
 
+	private function validate_image_file( array $file ): void {
+		$info = wp_check_filetype( $file['name'], self::ALLOWED_IMAGE_MIMES );
+		if ( empty( $info['type'] ) ) {
+			throw new RuntimeException(
+				sprintf(
+					/* translators: %s: the uploaded file's name */
+					__( '%s: only JPG, PNG, and WEBP images are allowed.', 'social-auto-scheduler' ),
+					$file['name'] ?? ''
+				)
+			);
+		}
+		if ( (int) $file['size'] > self::MAX_IMAGE_FILE_SIZE ) {
+			throw new RuntimeException(
+				sprintf(
+					/* translators: %s: the uploaded file's name */
+					__( '%s exceeds the 25 MB image size limit.', 'social-auto-scheduler' ),
+					$file['name'] ?? ''
+				)
+			);
+		}
+	}
+
 	private function upload_to_media_library( array $file ): int {
 		require_once ABSPATH . 'wp-admin/includes/file.php';
 		require_once ABSPATH . 'wp-admin/includes/media.php';
@@ -316,7 +408,7 @@ class SAS_Upload_Service {
 		return (int) $attachment_id;
 	}
 
-	private function send_to_backend( string $file_url, array $meta ): array {
+	private function send_to_backend( string $file_url, array $meta, array $images = [] ): array {
 		if ( ! SAS_License_Manager::is_active() ) {
 			throw new RuntimeException( __( 'Plugin is not connected to the backend. Please activate your license.', 'social-auto-scheduler' ) );
 		}
@@ -337,6 +429,12 @@ class SAS_Upload_Service {
 		// enforces this too, but filtering here avoids silently dropping the
 		// whole request if a non-Story-capable platform slipped through the UI.
 		if ( 'story' === $content_type ) {
+			$platforms = array_values( array_intersect( $platforms, [ 'instagram', 'facebook' ] ) );
+		}
+		// Photo posts have no YouTube equivalent at all (YouTube's API has no
+		// photo-posting capability) — same restriction VideoService._resolve_accounts
+		// enforces on the backend.
+		if ( 'photo' === $content_type ) {
 			$platforms = array_values( array_intersect( $platforms, [ 'instagram', 'facebook' ] ) );
 		}
 
@@ -366,12 +464,16 @@ class SAS_Upload_Service {
 		];
 
 		$body = [
+			// 'photo' posts use `images` instead — an empty string here is
+			// what the backend's VideoCreateSerializer expects when images
+			// is populated (see apps/videos/serializers.py's validate()).
 			'file_url'         => $file_url,
+			'images'           => $images,
 			'caption'          => 'story' === $content_type ? '' : sanitize_text_field( $meta['caption'] ?? '' ),
 			'description'      => 'story' === $content_type ? '' : $description,
 			'tags'             => 'story' === $content_type ? [] : $tags,
 			'content_type'     => $content_type,
-			'platforms'        => $platforms ?: [ 'story' === $content_type ? 'instagram' : 'youtube' ],
+			'platforms'        => $platforms ?: [ 'reel' === $content_type ? 'youtube' : 'instagram' ],
 			'scheduled_at'     => $meta['scheduled_at'] ?? null,
 			'publish_now'      => ! empty( $meta['publish_now'] ),
 			'metadata'         => $metadata,
