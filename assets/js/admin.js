@@ -109,19 +109,20 @@
         return checked ? checked.value : 'reel';
     }
 
-    // Stories have no YouTube equivalent. Facebook Story publishing is
-    // temporarily disabled here — repeated Graph API failures on Meta's
-    // side that aren't fully resolved yet — so only Instagram can receive
-    // them for now (mirrors the backend's VideoService._resolve_accounts).
-    // Add 'facebook' back once that's fixed.
-    const STORY_CAPABLE_PLATFORMS = ['instagram'];
+    // Stories have no YouTube equivalent — mirrors the backend's
+    // VideoService._resolve_accounts, which re-enabled Facebook here after
+    // FacebookPublisher._publish_story was extended to wait for Meta's
+    // publishing_phase status (the likely cause of the Graph API failures
+    // that had this disabled). Unverified against a real Facebook Page as
+    // of this change.
+    const STORY_CAPABLE_PLATFORMS = ['instagram', 'facebook'];
     // Photo posts have no YouTube equivalent at all (YouTube's API has no
     // photo-posting capability, full stop) — mirrors the backend's
     // VideoService._resolve_accounts PHOTO branch.
     const PHOTO_CAPABLE_PLATFORMS = ['instagram', 'facebook'];
 
     const CONTENT_TYPE_HELP_TEXT = {
-        story: 'Stories can only publish to Instagram, and publish without a caption.',
+        story: 'Stories can only publish to Instagram or Facebook, and publish without a caption.',
         photo: 'Photo posts can only publish to Instagram or Facebook — YouTube has no photo-posting capability.',
     };
 
@@ -527,7 +528,7 @@
             const platforms = getSelectedPlatforms(modal);
             if (!platforms.length) {
                 accountsError.textContent = getSelectedContentType(modal) === 'story'
-                    ? 'Connect an Instagram account to upload Stories.'
+                    ? 'Connect an Instagram or Facebook account to upload Stories.'
                     : isPhoto
                         ? 'Connect an Instagram or Facebook account to upload photos.'
                         : 'Select at least one platform to publish to.';
@@ -1210,9 +1211,10 @@
         }
         document.getElementById('sas-edit-tags').value = tagsStr;
 
-        // Stories are Instagram-only and don't support captions/descriptions/
-        // tags at all — editing them here would be silently ignored at
-        // publish time, so disable them instead of implying they do something.
+        // Stories don't support captions/descriptions/tags at all on either
+        // Instagram or Facebook — editing them here would be silently
+        // ignored at publish time, so disable them instead of implying
+        // they do something.
         const isStory = video.content_type === 'story';
         ['sas-edit-title', 'sas-edit-description', 'sas-edit-tags'].forEach(id => {
             document.getElementById(id).disabled = isStory;

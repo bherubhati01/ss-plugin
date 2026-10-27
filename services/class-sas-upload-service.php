@@ -61,9 +61,9 @@ class SAS_Upload_Service {
 
 	/**
 	 * Sanitize a content_type input down to 'reel' (default), 'story', or
-	 * 'photo'. Stories can only publish to Instagram, and photos only to
-	 * Instagram/Facebook — see SAS_Upload_Service::send_to_backend() and
-	 * the backend's VideoService, which both enforce this independently.
+	 * 'photo'. Stories and photos both publish only to Instagram/Facebook
+	 * — see SAS_Upload_Service::send_to_backend() and the backend's
+	 * VideoService, which both enforce this independently.
 	 */
 	public static function sanitize_content_type( $raw ): string {
 		$val = sanitize_key( (string) $raw );
